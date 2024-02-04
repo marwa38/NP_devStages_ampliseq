@@ -1,0 +1,289 @@
+---
+title: "<center> Nutritional Programming paper across developmental stages in context of intestinal microbiome <center>"
+author: "<center> Marwa Tawfik <center><br>"
+date: "<center> _`r Sys.Date()`_ <center>"
+output:
+  html_document:
+    code_folding: show
+    df_print: paged
+    theme: yeti
+    highlight: tango
+    toc: yes
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    number_sections: true
+  pdf_document:
+    fig_caption: yes
+    toc: yes
+---
+
+## Sequences QA/QC, filtering, and trimming
+
+```{r setup, include=FALSE}
+library(rmarkdown)
+library(tinytex)
+library(knitr)
+library(stats)
+knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE)
+```
+
+```{r create path and directories, file list and sample names}
+# load libraries ----
+library("tidyverse")
+library("dada2") 
+library("ggplot2")
+
+## create project to make things easier and then use current direcotry ./ as your path
+path <- "./" #create path to the data files we working on (#Let's now set the input directory, where the demultiplexed per-sample fastq files reside) 
+
+# create directories 
+dir.create("tables")
+dir.create("figures")
+dir.create("phyobjects")
+dir.create("codes_notes")
+dir.create("trees")
+dir.create("Robjects")
+dir.create("networks")
+
+fileList <- list.files(path) #list all files 
+
+#Assuming the fastq files naming format (forward and reverse): SAMPLENAME_R1.fq.gz and SAMPLENAME_R2.fq.gz we can proceed as follows to group the forward and reverse filenames together:
+fnFs <- sort(list.files(path, pattern = "_R1.fq.gz", full.names = TRUE)) #create a sorted list of vector for forward reads 
+fnRs <- sort(list.files(path, pattern = "_R2.fq.gz", full.names = TRUE)) #create a sorted list of vector for reverse reads 
+
+sample.names <- sapply(strsplit(basename(fnFs), "_"), '[', 1) #split the first part before _ and store that to sample.names vector
+saveRDS(sample.names, "Robjects/sample.names.rds")
+```
+
+```{r pretrimmed forward quality example}
+#Before trimming, it is a good idea to take a look at the quality profile of my data:
+
+# visualise few samples for inspection
+# forward 
+fplot1 <- plotQualityProfile(fnFs[18:19])
+fplot1 +
+  scale_x_continuous(breaks=seq(0,300,20)) +
+  geom_hline(yintercept=30, color = "blue") +
+  ggtitle("Forward QC")
+
+ggsave("figures/fwdQC.example.tiff", height = 3.5, width = 12, compression = "lzw", scale = 0.8)
+
+```
+
+```{r pretrimmed reverse quality example}
+# reverse 
+rplot1 <- plotQualityProfile(fnRs[18:19])
+rplot1 +
+  scale_x_continuous(breaks=seq(0,300,20)) +
+  geom_hline(yintercept=30, color = "blue") +
+  ggtitle("Reverse QC")
+
+ggsave("figures/rQC.example.tiff", height = 3.5, width = 12, compression = "lzw", scale = 0.8)
+
+```
+
+```{r preprocessing before cutadapt trimming}
+# trim primers using cutadapt ----
+# adaptors and 5' and 3' ends primers were trimmed using trimgalore 
+# but within amplicon sequences primers is to be trimmed using cutadapt as follow
+# ran this step on desktop (from Fish Nutrition Workshop 2022)
+#Filter and trim
+#Assign the filenames for the filtered fastq.gz files.
+
+# Place filtered files in filtN/ subdirectory
+fnFs.filtN <- file.path(path, "filtN", basename(fnFs)) # Put N-filterd files in filtN/ subdirectory
+fnRs.filtN <- file.path(path, "filtN", basename(fnRs))
+filterAndTrim(fnFs, fnFs.filtN, fnRs, fnRs.filtN, maxN = 0, multithread = TRUE)
+
+#Check if primers are still inside (N, W and H nucleotides are identified by cutadapt)
+FWD <- "CCTACGGGNGGCWGCAG"  
+REV <- "GACTACHVGGGTATCTAATCC"
+
+allOrients <- function(primer) {
+  # Create all orientations of the input sequence
+  require(Biostrings)
+  dna <- DNAString(primer)  # The Biostrings works w/ DNAString objects rather than character vectors
+  orients <- c(Forward = dna, Complement = complement(dna), Reverse = reverse(dna), 
+               RevComp = reverseComplement(dna))
+  return(sapply(orients, toString))  # Convert back to character vector
+}
+FWD.orients <- allOrients(FWD)
+REV.orients <- allOrients(REV)
+FWD.orients
+
+#We are now ready to count the number of times the primers appear in the forward and reverse read, while considering all possible primer orientations. 
+#Identifying and counting the primers on one set of paired end FASTQ files is sufficient, assuming all the files were created using the same library preparation, so we’ll just process the first sample.
+
+primerHits <- function(primer, fn) {
+  # Counts number of reads in which the primer is found
+  nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
+  return(sum(nhits > 0))
+}
+library(ShortRead)
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[1]]), 
+      FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN[[1]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[1]]), 
+      REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN[[1]]))
+#                  Forward Complement Reverse RevComp
+# FWD.ForwardReads       0          0       0       0
+# FWD.ReverseReads       0          0       0     112
+# REV.ForwardReads       0          0       0       8
+# REV.ReverseReads      99          0       0       0
+```
+
+
+```{r cutadapt trimming}
+# ran the following on a desktop system 
+cutadapt <- "cutadapt.exe"
+system2(cutadapt, args = "--version") 
+
+#We now create output filenames for the cutadapt-ed files, and define the parameters we are going to give the cutadapt command. 
+#The critical parameters are the primers, and they need to be in the right orientation, i.e. the FWD primer should have been matching the forward-reads in its forward orientation, and the REV primer should have been matching the reverse-reads in its forward orientation. Warning: A lot of output will be written to the screen by cutadapt!
+path.cut <- file.path(path, "cutadapt")
+if(!dir.exists(path.cut)) dir.create(path.cut)
+fnFs.cut <- file.path(path.cut, basename(fnFs))
+fnRs.cut <- file.path(path.cut, basename(fnRs))
+```
+
+
+```{r after cutadapt trimming}
+FWD.RC <- dada2:::rc(FWD)
+REV.RC <- dada2:::rc(REV)
+# Trim FWD and the reverse-complement of REV off of R1 (forward reads)
+R1.flags <- paste("-g", FWD, "-a", REV.RC) 
+# Trim REV and the reverse-complement of FWD off of R2 (reverse reads)
+R2.flags <- paste("-G", REV, "-A", FWD.RC) 
+# Run Cutadapt
+for(i in seq_along(fnFs)) {
+  system2(cutadapt, args = c(R1.flags, R2.flags, "-n", 2, # -n 2 required to remove FWD and REV from reads
+                             "-o", fnFs.cut[i], "-p", fnRs.cut[i], # output files
+                             fnFs.filtN[i], fnRs.filtN[i])) # input files
+}
+
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[1]]), 
+      FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.cut[[1]]), 
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[1]]), 
+      REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut[[1]]))
+
+#Trimming is based on sequences quality. First we will assign filenames for the trimmed sequences:
+cutFs <- sort(list.files(path.cut, pattern = "_R1.fq.gz", full.names = TRUE))
+cutRs <- sort(list.files(path.cut, pattern = "_R2.fq.gz", full.names = TRUE))
+sample.names <- sapply(strsplit(basename(cutFs), "_"), `[`, 1)
+
+# Place filtered files in filtered/ subdirectory
+filtFs <- file.path(path.cut, "filtered", paste0(sample.names, "_R1_filt.fastq.gz"))
+filtRs <- file.path(path.cut, "filtered", paste0(sample.names, "_R2_filt.fastq.gz"))
+names(filtFs) <- sample.names
+names(filtRs) <- sample.names
+
+# export cutFs, filtFs, cutRs, filtRs to use later
+saveRDS(cutFs, file = "Robjects/cutFs.rds")
+saveRDS(filtFs, file = "Robjects/filtFs.rds")
+saveRDS(cutRs, file = "Robjects/cutRs.rds")
+saveRDS(filtRs, file = "Robjects/filtRs.rds")
+```
+
+
+```{r number of reads before and after}
+# We’ll use standard filtering parameters: maxN=0 (DADA2 requires no Ns), truncQ=2, rm.phix=TRUE and maxEE=2. 
+# The maxEE parameter sets the maximum number of “expected errors” allowed in a read, which is a better filter than simply averaging quality scores.
+# truncLen=c(250,220) truncation of reads upto leave 250bp in forward and 220bp in reverse reads
+
+# incase need to import the inputs 
+# cutFs <- readRDS("Robjects/cutFs.rds")
+# filtFs <- readRDS("Robjects/filtFs.rds")
+# cutRs <- readRDS("Robjects/cutRs.rds")
+# filtRs <- readRDS("Robjects/filtRs.rds")
+
+out <- filterAndTrim(cutFs, filtFs, cutRs, filtRs, truncLen=c(250,220), maxN = 0, maxEE = c(2, 2), 
+                     truncQ = 2, rm.phix = TRUE, compress = TRUE, multithread = TRUE)  # on windows, set multithread = FALSE
+
+# save as .rds incase needed to be imported 
+saveRDS(out, "Robjects/filteredAndTrimmed.rds")
+# save as table to check results
+write.table(out, file = "tables/filteredAndTrimmed.txt", sep = "\t")
+```
+
+
+```{r trimmed forward quality example}
+# after trimming, quality inspection:
+
+# visualise few samples for inspection
+# forward 
+fplot2 <- plotQualityProfile(filtFs[18:19])
+fplot2 +
+  scale_x_continuous(breaks=seq(0,300,20)) +
+  geom_hline(yintercept=30, color = "blue") +
+  ggtitle("Forward Filtered")
+
+ggsave("figures/ftFQC.example.tiff", height = 3.5, width = 12, compression = "lzw", scale =0.8)
+```
+
+```{r trimmed reverse quality example}
+# reverse 
+rplot2 <- plotQualityProfile(filtRs[18:19])
+rplot2 +
+  scale_x_continuous(breaks=seq(0,300,20)) +
+  geom_hline(yintercept=30, color = "blue") +
+  ggtitle("Reverse Filtered QC")
+
+ggsave("figures/ftRQC.example.tiff", height = 3.5, width = 12, compression = "lzw", scale =0.8)
+```
+
+```{r pretrimmed forward quality}
+#Before trimming, it is a good idea to take a look at the quality profile of my data:
+
+# visualise few samples for inspection
+# forward 
+fplot <- plotQualityProfile(fnFs)
+fplot +
+  scale_x_continuous(breaks=seq(0,300,20)) +
+  geom_hline(yintercept=30, color = "blue") +
+  ggtitle("Forward QC")
+
+ggsave("figures/fwdQC.tiff", height = 30, width = 50, compression = "lzw", limitsize = FALSE)
+
+```
+
+```{r pretrimmed reverse quality}
+# reverse 
+rplot <- plotQualityProfile(fnRs)
+rplot +
+  scale_x_continuous(breaks=seq(0,300,20)) +
+  geom_hline(yintercept=30, color = "blue") +
+  ggtitle("Reverse QC")
+
+ggsave("figures/rQC.tiff", height = 30, width = 50, compression = "lzw", limitsize = FALSE)
+
+```
+
+
+```{r trimmed forward quality}
+# after trimming, quality inspection:
+
+# visualise few samples for inspection
+# forward 
+fplot <- plotQualityProfile(filtFs)
+fplot +
+  scale_x_continuous(breaks=seq(0,300,20)) +
+  geom_hline(yintercept=30, color = "blue") +
+  ggtitle("Forward Filtered")
+
+ggsave("figures/ftFQC.tiff", height = 30, width = 50, compression = "lzw", limitsize = FALSE)
+```
+
+```{r trimmed reverse quality}
+# reverse 
+rplot <- plotQualityProfile(filtRs)
+rplot +
+  scale_x_continuous(breaks=seq(0,300,20)) +
+  geom_hline(yintercept=30, color = "blue") +
+  ggtitle("Reverse Filtered QC")
+
+ggsave("figures/ftRQC.tiff", height = 30, width = 50, compression = "lzw", limitsize = FALSE)
+```
+
+```{r sessionInfo}
+sessionInfo()
+```

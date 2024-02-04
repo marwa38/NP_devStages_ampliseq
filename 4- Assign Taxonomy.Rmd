@@ -1,0 +1,42 @@
+---
+title: "Assign Taxonomy"
+author: "Marwa Tawfik"
+summary: "Microbiome_dada2_pipeline_NPdevstages"
+Platform: "R version 4.1.0 (2021-05-18) -- Camp Pontanezen; x86_64-conda-linux-gnu (64-bit)"
+date: "22 October 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+# Assign Taxonomy ---- 
+#for silva from kingdom to spp.
+taxa <- assignTaxonomy(seqtab.nochim2, "silva_nr99_v138_train_set.fa", multithread = TRUE)
+taxa <- addSpecies(taxa, "silva_species_assignment_v138.fa")
+
+unname(head(taxa))
+saveRDS(taxa, file = "Robjects/taxa.rds")
+write.table(taxa, file = "tables/taxa.txt", sep = "\t")
+
+# taxa <- readRDS("Robjects/taxa.rds") #incase need to read rds file into a vector in our R env
+```
+
+
+```{r}
+#let's inspect the taxonmic asssignment (same as unname(head(taxa))) > better way than unname(head(taxa))
+taxa.print <- taxa #remove sequence rawnames for display only 
+rownames(taxa.print) <- NULL
+head(taxa.print)
+write.table(taxa.print, file = "tables/taxa.print.txt", sep = "\t")
+
+# some editing to save sequences as fasta as follow (done in excel)
+# kept the sequences in notepad/word and then save as .txt and changed that later to .fasta
+```
+
+```{r}
+sessionInfo()
+```

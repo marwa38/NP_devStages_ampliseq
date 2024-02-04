@@ -1,0 +1,112 @@
+---
+title: "Loading andOR formating phyloseq object"
+author: "Marwa Tawfik"
+summary: "Microbiome_dada2_pipeline_NPdevstages"
+Platform: "R version 4.1.0 (2021-05-18) -- Camp Pontanezen; x86_64-conda-linux-gnu (64-bit)"
+date: "22 October 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Loading andOR formating phyloseq object
+# load libraries ----
+library("tidyverse")
+library("dada2") 
+library("ggplot2")
+library("phyloseq")
+library("microbiome")
+library("vegan")
+library("plyr")
+```
+
+```{r}
+# Loading andOR formating phyloseq object 
+# A little more data formatting and loading phyloseq object ----
+# we want to duplicate the phyloseq object, so that we can have 1 original and edit the other
+ps.1 <- ps.noncontam
+ps.1
+
+# check out for any of the taxa names that I know are contaminants 
+unname(tax_table(ps.1))
+
+ps.1.intes <- subset_samples(ps.1, sample == "intestine")
+ps.1.intes <- prune_taxa(taxa_sums(ps.1.intes) > 0, ps.1.intes)
+```
+
+```{r}
+# add RefSeq ----
+dna <- Biostrings::DNAStringSet(taxa_names(ps.1))
+# dna
+saveRDS(dna, "Robjects/dna.rds")
+
+names(dna) <- taxa_names(ps.1)
+saveRDS(names(dna), "Robjects/names(dna).rds")
+
+ps.1 <- merge_phyloseq(ps.1, dna)
+# replace sequence IDs with ASV
+taxa_names(ps.1) <- paste0("ASV", seq(ntaxa(ps.1))) 
+
+saveRDS(ps.1, "phyobjects/ps.1.refseq.rds")
+# ps.1
+
+## add RefSeq to intes only 
+dna.intes <- Biostrings::DNAStringSet(taxa_names(ps.1.intes))
+# dna
+saveRDS(dna.intes, "Robjects/dna.intes.rds")
+
+names(dna.intes) <- taxa_names(ps.1.intes)
+saveRDS(names(dna.intes), "Robjects/names(dna.intes).rds")
+
+ps.1.intes <- merge_phyloseq(ps.1.intes, dna.intes)
+# replace sequence IDs with ASV
+taxa_names(ps.1.intes) <- paste0("ASV", seq(ntaxa(ps.1.intes))) 
+
+saveRDS(ps.1, "phyobjects/ps.1.intes.refseq.rds")
+# ps.1.intes
+```
+
+```{r}
+# sanity checks
+head(taxa_names(ps.noncontam))
+head(taxa_names(ps.1))
+
+saveRDS(taxa_names(ps.noncontam), "Robjects/taxa_names(ps.noncontam).rds")
+saveRDS(taxa_names(ps.1), "Robjects/taxa_names(ps.1).rds")
+
+write.table(taxa_names(ps.noncontam), file = "tables/taxa_names(ps.noncontam).txt", sep = "\t")
+write.table(taxa_names(ps.1), file = "tables/taxa_names(ps.1).txt", sep = "\t")
+
+get_taxa_unique(ps.1, "Kingdom") # Unique kingdom names 
+get_taxa_unique(ps.1, "Phylum") # Unique phylum names 
+get_taxa_unique(ps.1, "Class") # Unique class names 
+get_taxa_unique(ps.1, "Order") # Unique order names 
+get_taxa_unique(ps.1, "Family") # Unique family names 
+get_taxa_unique(ps.1, "Genus") # Unique Genus names
+get_taxa_unique(ps.1, "Species") # Unique Species names 
+
+write.table(get_taxa_unique(ps.1, "Kingdom"), "tables/ps.1.tree.refseq.kingdom.txt")
+write.table(get_taxa_unique(ps.1, "Phylum"), "tables/ps.1.tree.refseq.phylum.txt")
+write.table(get_taxa_unique(ps.1, "Class"), "tables/ps.1.tree.refseq.class.txt")
+write.table(get_taxa_unique(ps.1, "Order"), "tables/ps.1.tree.refseq.order.txt") 
+write.table(get_taxa_unique(ps.1, "Family"), "tables/ps.1.tree.refseq.family.txt")  
+write.table(get_taxa_unique(ps.1, "Genus"), "tables/ps.1.tree.refseq.genus.txt")
+write.table(get_taxa_unique(ps.1, "Species"), "tables/ps.1.tree.refseq.species.txt") 
+
+# intes
+write.table(get_taxa_unique(ps.1.intes, "Kingdom"), "tables/ps.1.intes.refseq.kingdom.txt")
+write.table(get_taxa_unique(ps.1.intes, "Phylum"), "tables/ps.1.intes.refseq.phylum.txt")
+write.table(get_taxa_unique(ps.1.intes, "Class"), "tables/ps.1.intes.refseq.class.txt")
+write.table(get_taxa_unique(ps.1.intes, "Order"), "tables/ps.1.intes.refseq.order.txt") 
+write.table(get_taxa_unique(ps.1.intes, "Family"), "tables/ps.1.intes.refseq.family.txt")  
+write.table(get_taxa_unique(ps.1.intes, "Genus"), "tables/ps.1.intes.refseq.genus.txt")
+write.table(get_taxa_unique(ps.1.intes, "Species"), "tables/ps.1.intes.refseq.species.txt") 
+```
+
+
+```{r}
+sessionInfo()
+```

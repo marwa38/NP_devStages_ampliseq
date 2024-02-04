@@ -1,0 +1,4 @@
+	input	filtered	denoisedF	denoisedR	merged	nochim
+negative-1	122	15	12	12	12	12
+negative-2	470	191	178	178	178	178
+negative-3	454	74	36	25	23	23

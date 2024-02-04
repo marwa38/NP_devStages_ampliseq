@@ -1,0 +1,3 @@
+	input	filtered	denoisedF	denoisedR	merged	nochim
+positive-1	366005	270617	269213	269759	266922	261122
+positive-2	164083	118268	117888	118055	117161	107985

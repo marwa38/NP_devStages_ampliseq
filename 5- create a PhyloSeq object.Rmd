@@ -1,0 +1,165 @@
+---
+title: "create a PhyloSeq object"
+author: "Marwa Tawfik"
+summary: "Microbiome_dada2_pipeline_NPdevstages"
+Platform: "R version 4.1.0 (2021-05-18) -- Camp Pontanezen; x86_64-conda-linux-gnu (64-bit)"
+date: "22 October 2022"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+# create a PhyloSeq object ----
+
+# load packages 
+library(phyloseq)
+packageVersion("phyloseq")
+#[1] ‘1.38.0’
+
+#or in one line 
+# library(phyloseq); packageVersion("phyloseq")
+```
+
+
+```{r}
+#metadata file ----
+meta <- read.table("metadata2.np.txt", header = TRUE) # samples with neg and pos
+rownames(meta) <- meta$sample.ID
+meta <- meta[, -1]
+```
+
+
+```{r}
+
+# a bit of ordering ----
+# change characters to factors
+meta$sample <- factor(meta$sample)
+# check levels (should be factor first)
+levels(meta$sample)
+# arrange according to what you prefer 
+meta$sample <- 
+  factor(meta$sample, levels = c("intestine", "feed", "water", "control-+"))
+
+levels(meta$sample)
+# [1] "intestine" "feed"      "water"     "neg_pos"  
+
+meta$sample # sanity check to see if there is any NAs (worked fine and ordered well if there is no NAs)
+
+# do the same for sample_regime column
+meta$sample_regime <- factor(meta$sample_regime)
+# check levels (should be factor first)
+levels(meta$sample_regime)
+# arrange according to what you prefer 
+meta$sample_regime <- 
+  factor(meta$sample_regime, levels = c("intestine.M", "intestine.V", 
+                                        "intestine.MM", "intestine.VM", 
+                                        "intestine.MMV", "intestine.VMV",
+                                        "feed.M", "feed.V",
+                                        "water.M", "water.V",
+                                        "water.MM", "water.VM",
+                                        "water.MMV", "water.VMV",
+                                        "positive", "negative"))
+
+levels(meta$sample_regime)
+# [1]  [1] "intestine.M"   "intestine.V"   "intestine.MM"  "intestine.VM"  "intestine.MMV" "intestine.VMV" "feed.M"        "feed.V"        "water.M"       "water.V"      
+# [11] "water.MM"      "water.VM"      "water.MMV"     "water.VMV"     "+-"           
+
+ggplot(meta, aes(x = sample_regime, fill = sample, group = sample)) + 
+  theme_bw() +
+  geom_bar() + 
+  theme(axis.text.x = element_text(size = 10, angle = 90)) +
+  scale_x_discrete(limits = levels(meta$sample.name)) +
+  scale_y_continuous(limits = c(0, 18), breaks = seq(0, 18, by = 2)) +
+  labs(y = "# of samples") +
+  scale_fill_manual(values = c("#FFCC99", "lightgreen", "lightblue", "grey"))
+
+ggsave("figures/sample_regime.number.tiff", height = 5, width = 5)
+```
+
+
+```{r}
+# ASV table ----
+
+asv.table <- otu_table(seqtab.nochim2, taxa_are_rows = FALSE)
+
+write.table(asv.table, "tables/asv.table.txt", sep = "\t")
+
+#taxa table was created in the previous step (assign taxonomy) in a vector called taxa ----
+
+#create the phyloseq object from the three:
+ps <- phyloseq(asv.table, tax_table(taxa), sample_data(meta)) #for all taxa levels including spp
+saveRDS(ps, "phyobjects/ps.rds")
+ps
+```
+
+
+```{r}
+# extra code for sanity checks----
+taxa.summary <- summary(taxa)
+taxa.summary
+ #   Kingdom             Phylum             Class              Order              Family             Genus             Species         
+ # Length:7483        Length:7483        Length:7483        Length:7483        Length:7483        Length:7483        Length:7483       
+ # Class :character   Class :character   Class :character   Class :character   Class :character   Class :character   Class :character  
+ # Mode  :character   Mode  :character   Mode  :character   Mode  :character   Mode  :character   Mode  :character   Mode  :character 
+
+write.table(taxa.summary, "tables/taxa.summary.txt", sep = "\t")
+
+dim(taxa)
+dim(meta)
+dim(asv.table)
+
+# [1] 7483    7
+# [1] 137   11
+# [1]  137 7483
+library(microbiome)
+summarize_phyloseq(ps)
+# I can see there is a number of singeltons whcih is not preferable to be removed
+
+# Compositional = NO2
+# 1] Min. number of reads = 122] Max. number of reads = 3219443] Total number of reads = 78368964] Average number of reads = 57203.62043795625] Median number of reads = 207397] Sparsity = 0.9750314825526676] Any OTU sum to 1 or less? YES8] Number of singletons = 259] Percent of OTUs that are singletons
+#         (i.e. exactly one read detected across all samples)0.33409060537217710] Number of sample variables are: 11sample.namesample.nosamplePhaseRegionRegimeSample_Regimesample_regimeSample_Typesample_or_controlsample.name.12
+# [[1]]
+# [1] "1] Min. number of reads = 12"
+# 
+# [[2]]
+# [1] "2] Max. number of reads = 321944"
+# 
+# [[3]]
+# [1] "3] Total number of reads = 7836896"
+# 
+# [[4]]
+# [1] "4] Average number of reads = 57203.6204379562"
+# 
+# [[5]]
+# [1] "5] Median number of reads = 20739"
+# 
+# [[6]]
+# [1] "7] Sparsity = 0.975031482552667"
+# 
+# [[7]]
+# [1] "6] Any OTU sum to 1 or less? YES"
+# 
+# [[8]]
+# [1] "8] Number of singletons = 25"
+# 
+# [[9]]
+# [1] "9] Percent of OTUs that are singletons \n        (i.e. exactly one read detected across all samples)0.334090605372177"
+# 
+# [[10]]
+# [1] "10] Number of sample variables are: 11"
+# 
+# [[11]]
+#  [1] "sample.name"       "sample.no"         "sample"            "Phase"             "Region"            "Regime"
+#  [7] "Sample_Regime"     "sample_regime"     "Sample_Type"       "sample_or_control" "sample.name.1"
+
+```
+
+
+```{r}
+sessionInfo()
+```
