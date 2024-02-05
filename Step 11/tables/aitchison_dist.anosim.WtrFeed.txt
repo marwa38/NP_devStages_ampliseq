@@ -1,0 +1,21 @@
+
+Call:
+anosim(x = aitchison_dist.WtrFeed, grouping = sample_data(ps.prev.WtrFeed)$sample) 
+Dissimilarity: euclidean 
+
+ANOSIM statistic R:     1 
+      Significance: 0.001 
+
+Permutation: free
+Number of permutations: 999
+
+Upper quantiles of permutations (null model):
+  90%   95% 97.5%   99% 
+0.116 0.170 0.214 0.306 
+
+Dissimilarity ranks between and within classes:
+         0%    25%   50%    75% 100%   N
+Between 169 195.75 222.5 249.25  276 108
+feed      1   7.50  18.0  22.00   45  15
+water     4  54.00  92.0 130.00  168 153
+

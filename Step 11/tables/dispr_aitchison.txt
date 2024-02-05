@@ -1,0 +1,20 @@
+Homogeneity of multivariate dispersions
+
+Call: vegan::betadisper(d = aitchison_dist, group =
+phyloseq::sample_data(ps.prev.tree)$Sample_Regime, type = "median")
+
+No. of Positive Eigenvalues: 128
+No. of Negative Eigenvalues: 0
+
+Average distance to median:
+  intestine.M   intestine.V  intestine.MM  intestine.VM intestine.MMV intestine.VMV 
+        51.37         47.09         31.69         20.84         31.66         27.72 
+       feed.M        feed.V       water.M       water.V      water.MM      water.VM 
+        46.06         32.76         52.78         51.22         49.95         52.28 
+    water.MMV     water.VMV 
+        40.34         51.35 
+
+Eigenvalues for PCoA axes:
+(Showing 8 of 128 eigenvalues)
+ PCoA1  PCoA2  PCoA3  PCoA4  PCoA5  PCoA6  PCoA7  PCoA8 
+125037  40932  35417  19011  17151   7958   6564   6522 

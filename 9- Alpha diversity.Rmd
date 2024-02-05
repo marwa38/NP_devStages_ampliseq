@@ -1,0 +1,491 @@
+---
+title: "Alpha diversity"
+author: "Marwa Tawfik"
+date: "14 07 2023"
+output: html_document
+---
+
+Summary
+THere is a decreasing trend from stimulus through intermediate to challenge phases of alpha diversity
+Pairwise showed stimulus is higher than both interm and chall (no diff between interm and chall although wilcox showed there is!)
+M showed higher alpha div than V fish (model) without any differece at each phase 
+Group + Phase was chosen with AIC (shouldn't be reliable as plot showed the assumptions of lm not met), Group alone was not selected though while Phase was. HOw? although interaction showed no sig diff?
+lmp -> intestine alpha div is lower than feed and water, but no diff between water and feed (although diff shown in wilcox)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, results="hide"}
+# load libraries
+library(phyloseq)
+library(microeco)
+library(file2meco)
+library(tidyverse)
+library(ggplot2)
+library(SRS)
+library(lmPerm)
+library(rstatix)
+```
+
+```{r}
+# import phyloseq and transform into microtable 
+ps.prev <- readRDS("phyobjects/ps.prev.f.rds") # vector created in previous steps 
+meta <- as.data.frame(sample_data(ps.prev))
+write.table(meta, "meta_ps.prev.txt", sep = "\t", quote = F, col.names = NA)
+meta1 <- read.table("meta_ps.prev1.txt", header = T, sep = "\t")
+rownames(meta1) <- meta1$X
+meta1 <- meta1[, -1]
+sample_data(ps.prev)$Group <- meta1$Group
+
+dataset <- phyloseq2meco(ps.prev)
+
+ps.prev.intes <- subset_samples(ps.prev, sample == "intestine")
+ps.prev.intes <- prune_taxa(taxa_sums(ps.prev.intes) > 0, ps.prev.intes)
+saveRDS(ps.prev.intes, "phyobjects/ps.prev.intes.f.f.rds") # vector from previous steps 
+dataset.intes <- phyloseq2meco(ps.prev.intes)
+sample_data(ps.prev.intes) #sanity check
+
+
+ps.prev.feed <- subset_samples(ps.prev, sample == "feed")
+ps.prev.feed <- prune_taxa(taxa_sums(ps.prev.feed) > 0, ps.prev.feed)
+saveRDS(ps.prev.feed, "phyobjects/ps.prev.feed.f.f.rds") # vector from previous steps 
+dataset.feed <- phyloseq2meco(ps.prev.feed)
+
+
+ps.prev.water <- subset_samples(ps.prev, sample == "water")
+ps.prev.water <- prune_taxa(taxa_sums(ps.prev.water) > 0, ps.prev.water)
+saveRDS(ps.prev.water, "phyobjects/ps.prev.water.f.f.rds") # vector from previous steps 
+dataset.water <- phyloseq2meco(ps.prev.water)
+```
+
+```{r}
+# SRS when method = "SRS"
+d1 <- clone(dataset)
+d1$rarefy_samples(method = "SRS", rngseed = 123)
+# View(d2$otu_table)
+# d1$sample_sums()
+ps.prev <- meco2phyloseq(d1)
+```
+
+```{r}
+# SRS when method = "SRS"
+d2 <- clone(dataset.intes)
+d2$rarefy_samples(method = "SRS", rngseed = 123)
+# View(d2$otu_table)
+# d2$sample_sums()
+ps.prev.intes <- meco2phyloseq(d2)
+```
+
+```{r}
+# SRS when method = "SRS"
+d3 <- clone(dataset.feed)
+d3$rarefy_samples(method = "SRS", rngseed = 123)
+# View(d2$otu_table)
+# d2$sample_sums()
+ps.prev.feed <- meco2phyloseq(d3)
+```
+
+```{r}
+# SRS when method = "SRS"
+d4 <- clone(dataset.water)
+d4$rarefy_samples(method = "SRS", rngseed = 123)
+# View(d2$otu_table)
+# d2$sample_sums()
+ps.prev.water <- meco2phyloseq(d4)
+```
+
+```{r}
+# use phyloseq package ----
+# Calculate Observed Species (eveness), Choa1 and Shannon using estimate_richness function of PhyloSeq:
+ps.prev.alpha.div <- estimate_richness(ps.prev, measures = c("Observed", "Chao1", "Shannon", "Simpson"))
+
+ps.prev.intes.alpha.div <- estimate_richness(ps.prev.intes, measures = c("Observed", "Chao1", "Shannon", "Simpson"))
+
+ps.prev.feed.alpha.div <- estimate_richness(ps.prev.feed, measures = c("Observed", "Chao1", "Shannon", "Simpson"))
+
+ps.prev.water.alpha.div <- estimate_richness(ps.prev.water, measures = c("Observed", "Chao1", "Shannon", "Simpson"))
+
+# Add metadata to make plots:
+ps.prev.rich <- cbind(as.data.frame(sample_data(ps.prev)), ps.prev.alpha.div)
+write.table(ps.prev.rich, "tables/ps.prev.rich.txt", sep="\t", quote=F, col.names=NA)
+
+ps.prev.intes.rich <- cbind(as.data.frame(sample_data(ps.prev.intes)), ps.prev.intes.alpha.div)
+#write.table(ps.prev.intes.rich, "tables/ps.prev.intes.rich.txt", sep="\t", quote=F, col.names=NA)
+
+ps.prev.feed.rich <- cbind(as.data.frame(sample_data(ps.prev.feed)), ps.prev.feed.alpha.div)
+ps.prev.water.rich <- cbind(as.data.frame(sample_data(ps.prev.water)), ps.prev.water.alpha.div)
+
+head(ps.prev.intes.rich) # sanity check for each subset
+```
+
+
+```{r}
+# check if assumption of linear model is met or not
+model <- lm(Shannon ~ Group + Phase + Group * Phase, data = ps.prev.intes.rich)
+plot(model)
+# nearly equal variance for each tested group/treatmnet (plot1)
+# linearity of the model is not achieved (plot 2)
+```
+
+```{r}
+step(lm(Shannon ~ Group + Phase + Group * Phase, data = ps.prev.intes.rich))
+```
+```{r}
+summary(lm(Shannon ~ Group + Phase + Group * Phase, data = ps.prev.intes.rich))
+```
+
+```{r}
+model <- lmp(Shannon ~ Group + Phase + Group * Phase, data = ps.prev.intes.rich)
+summary(model)
+```
+
+
+```{r}
+# run non-paraemtic to chek for the pairwise statitiscal signfincance
+# pyloric (1) is significantly higher from distal (3) **
+# group1	group3	n1=23	n2=34	statistic=574	p=0.003	p.adj=0.008	sig=**
+pairwise_wilcox_test(ps.prev.intes.rich,
+                               Shannon ~ Group,
+                               p.adjust.method = "BH")
+```
+```{r}
+pairwise_wilcox_test(ps.prev.intes.rich,
+                               Shannon ~ Phase,
+                               p.adjust.method = "BH")
+```
+
+M fish 
+```{r}
+Mfish <- subset(ps.prev.intes.rich, Group %in% "M fish")
+model <- lmp(Shannon ~ Phase, data = Mfish)
+summary(model)
+```
+
+V fish 
+```{r}
+Vfish <- subset(ps.prev.intes.rich, Group %in% "V fish")
+model <- lmp(Shannon ~ Phase, data = Vfish)
+summary(model)
+```
+Stimulus
+```{r}
+stimulus <- subset(ps.prev.intes.rich, Phase %in% "stimulus")
+model <- lmp(Shannon ~ Group, data = stimulus)
+summary(model)
+```
+```{r}
+interm <- subset(ps.prev.intes.rich, Phase %in% "intermediate")
+contr <- list(Group="contr.treatment")
+model <- lmp(Shannon ~ Group, data = interm, contrasts = contr)
+summary(model)
+```
+```{r}
+chall <- subset(ps.prev.intes.rich, Phase %in% "challenge")
+contr <- list(Group="contr.treatment")
+model <- lmp(Shannon ~ Group, data = chall, contrasts = contr)
+summary(model)
+```
+interm vs chall
+relevel for interm vs chall comparison within the model without splitting or removing the stim
+```{r}
+class(ps.prev.intes.rich$Phase) # factor
+levels(ps.prev.intes.rich$Phase)
+ps.prev.intes.rich$Phase1 <- relevel(ps.prev.intes.rich$Phase, ref = "intermediate")
+levels(ps.prev.intes.rich$Phase1) # "intermediate" "stimulus"     "challenge" 
+
+
+model <- lmp(Shannon ~ Phase1, data = ps.prev.intes.rich)
+summary(model)
+# create contrast to see names of levels 
+contr <- list(Phase1="contr.treatment")
+model <- lmp(Shannon ~ Phase1, data = ps.prev.intes.rich, contrasts = contr)
+summary(model)
+```
+
+```{r}
+pairwise_wilcox_test(ps.prev.intes.rich,
+                               Shannon ~ Regime,
+                               p.adjust.method = "BH")
+```
+
+```{r}
+pairwise_wilcox_test(ps.prev.intes.rich,
+                               Shannon ~ Group,
+                               p.adjust.method = "BH")
+```
+
+```{r}
+pairwise_wilcox_test(ps.prev.rich,
+                               Shannon ~ sample_regime,
+                               p.adjust.method = "BH")
+wilcox.ps.prev.rich <- pairwise_wilcox_test(ps.prev.rich,
+                               Shannon ~ sample_regime,
+                               p.adjust.method = "BH")
+# write.table(wilcox.ps.prev.rich, "tables/wilcox.ps.prev.rich.txt", sep = "\t", quote = F, col.names = NA)
+# gut is lower from water and feed under each regime (regardless of the regime)
+# no stat sig. between two regimes for any sample type (MMV vs VMV): gut or feed or water 
+```
+
+```{r}
+contr <- list(sample="contr.treatment")
+model <- lmp(Shannon ~ sample, data = ps.prev.rich, contrasts = contr)
+summary(model)
+```
+
+```{r}
+class(ps.prev.rich$sample) # factor
+levels(ps.prev.rich$sample)
+ps.prev.rich$sample1 <- relevel(ps.prev.rich$sample, ref = "feed")
+levels(ps.prev.rich$sample1) # "intermediate" "stimulus"     "challenge" 
+
+
+# create contrast to see names of levels 
+contr <- list(sample1="contr.treatment")
+model <- lmp(Shannon ~ sample1, data = ps.prev.rich, contrasts = contr)
+summary(model)
+```
+
+```{r}
+pairwise_wilcox_test(ps.prev.rich,
+                               Shannon ~ sample,
+                               p.adjust.method = "BH")
+# gut is lower than water (****) and feed (****)
+# feed is lower than water (*)
+```
+
+
+```{r}
+#tiff("figures/fig2a.tiff", height = 5, width = 5, units = "in", res = 300, compression = "lzw")
+# plot(Shannon ~ jitter(Phase, amount = 0.2), data = ps.prev.intes.rich, xlim = c(0.5, 3.5), axes = F, xlab = "Phase", ylab = "Shannon Weiner", pch = 16)
+# box()
+# axis(2)
+# axis(1, at = c(1,2,3), labels = c("stimulus", "intermediate", "challenge"))
+# ps.prev.intes.rich$Phase <- as.numeric(ps.prev.intes.rich$Region)
+# 
+# model <- lmp(Shannon ~ Phase, ps.prev.intes.rich)
+# fakeX <- seq(0, 3.5, by = 0.01)
+# predictedY <- predict(model, newdata = data.frame(gut.order = fakeX), se.fit = T)
+# lines(fakeX, predictedY$fit, lwd = 3, col = "blue")
+# lines(fakeX, predictedY$fit + predictedY$se.fit, lwd = 1, lty = 2, col = "blue")
+# lines(fakeX, predictedY$fit - predictedY$se.fit, lwd = 1, lty = 2, col = "blue")
+#dev.off()
+```
+
+```{r}
+ggplot(ps.prev.intes.rich, aes(x = Phase, y = Shannon)) +
+  theme_bw() +
+  geom_point(size = 1.3, position = position_jitter(width = 0.2), alpha = 0.8) +
+  theme(text = element_text(size = 12)) +
+  labs(y = "Shannon-Weiner", x = "Phase") #+
+  #scale_color_manual(values = c("#C71585", "#008080")) 
+ggsave("figures/fig2a.tiff", height = 3, width = 4, units = "in", dpi = 300, compression = "lzw")
+```
+
+
+```{r}
+ggplot(ps.prev.intes.rich, aes(x = Phase, y = Shannon, color = Group)) + 
+  geom_point(size = 1.1, position = position_jitterdodge(jitter.width = 0.3, dodge.width = 1)) +
+  theme_bw() +
+  #facet_wrap(~Phylum) +
+  labs(y = "Shannon-Weiner", x = "Phase") +
+  #theme(axis.text.x = element_text(angle = 90)) +
+  theme(text = element_text(size = 12)) +
+  scale_color_manual(values = c("#C71585", "#008080"), labels = c("M", "V")) +
+  guides(color = guide_legend(title = "Group"))
+ggsave("figures/fig2b.tiff", height = 3, width = 4, units = "in", dpi = 300, compression = "lzw")
+```
+
+```{r}
+ggplot(ps.prev.intes.rich, aes(x = Group, y = Shannon, color = Phase)) +
+  theme_bw() +
+  geom_point(size = 1.3, position = position_jitter(width = 0.2), alpha = 0.8) +
+  theme(text = element_text(size = 12)) +
+  labs(y = "Shannon-Weiner", x = "Group") +
+  scale_color_manual(values = c("#FF7F00", "#6A3D9A", "#A6CEE3"))
+ggsave("figures/fig2c.tiff", height = 3, width = 4, units = "in", dpi = 300, compression = "lzw")
+```
+
+```{r}
+ggplot(ps.prev.rich, aes(x = sample, y = Shannon)) +
+  theme_bw() +
+  geom_point(size = 0.5, position = position_jitter(width = 0.2), alpha = 0.8) +
+  theme(text = element_text(size = 12)) +
+  labs(y = "Shannon-Weiner", x = "Sample type")
+ggsave("figures/fig2d.tiff", height = 3, width = 4, units = "in", dpi = 300, compression = "lzw")
+```
+
+
+Water
+```{r}
+# check if assumption of linear model is met or not
+model <- lm(Shannon ~ Group + Phase + Group * Phase, data = ps.prev.water.rich)
+plot(model)
+# nearly equal variance for each tested group/treatmnet (plot1)
+# linearity of the model is not achieved (plot 2)
+```
+
+```{r}
+step(lm(Shannon ~ Group + Phase + Group * Phase, data = ps.prev.water.rich))
+```
+
+```{r}
+summary(lm(Shannon ~ Group + Phase + Group * Phase, data = ps.prev.water.rich))
+```
+
+```{r}
+model <- lmp(Shannon ~ Group + Phase + Group * Phase, data = ps.prev.water.rich)
+summary(model)
+```
+
+
+```{r}
+# run non-paraemtic to chek for the pairwise statitiscal signfincance
+# pyloric (1) is significantly higher from distal (3) **
+# group1	group3	n1=23	n2=34	statistic=574	p=0.003	p.adj=0.008	sig=**
+pairwise_wilcox_test(ps.prev.water.rich,
+                     Shannon ~ Group,
+                     p.adjust.method = "BH")
+```
+
+```{r}
+pairwise_wilcox_test(ps.prev.water.rich,
+                     Shannon ~ Phase,
+                     p.adjust.method = "BH")
+```
+
+M fish 
+```{r}
+Mwater <- subset(ps.prev.water.rich, Group %in% "M water")
+model <- lmp(Shannon ~ Phase, data = Mwater)
+summary(model)
+```
+
+V fish 
+```{r}
+Vwater <- subset(ps.prev.water.rich, Group %in% "V water")
+model <- lmp(Shannon ~ Phase, data = Vwater)
+summary(model)
+```
+Stimulus
+```{r}
+stimulus <- subset(ps.prev.water.rich, Phase %in% "stimulus")
+model <- lmp(Shannon ~ Group, data = stimulus)
+summary(model)
+```
+
+```{r}
+interm <- subset(ps.prev.water.rich, Phase %in% "intermediate")
+contr <- list(Group="contr.treatment")
+model <- lmp(Shannon ~ Group, data = interm, contrasts = contr)
+summary(model)
+```
+```{r}
+chall <- subset(ps.prev.water.rich, Phase %in% "challenge")
+contr <- list(Group="contr.treatment")
+model <- lmp(Shannon ~ Group, data = chall, contrasts = contr)
+summary(model)
+```
+interm vs chall
+relevel for interm vs chall comparison within the model without splitting or removing the stim
+```{r}
+class(ps.prev.water.rich$Phase) # factor
+levels(ps.prev.water.rich$Phase)
+ps.prev.water.rich$Phase1 <- relevel(ps.prev.water.rich$Phase, ref = "intermediate")
+levels(ps.prev.water.rich$Phase1) # "intermediate" "stimulus"     "challenge" 
+
+
+model <- lmp(Shannon ~ Phase1, data = ps.prev.water.rich)
+summary(model)
+# create contrast to see names of levels 
+contr <- list(Phase1="contr.treatment")
+model <- lmp(Shannon ~ Phase1, data = ps.prev.water.rich, contrasts = contr)
+summary(model)
+```
+
+```{r}
+pairwise_wilcox_test(ps.prev.water.rich,
+                     Shannon ~ Regime,
+                     p.adjust.method = "BH")
+```
+
+```{r}
+contr <- list(sample="contr.treatment")
+model <- lmp(Shannon ~ sample, data = ps.prev.rich, contrasts = contr)
+summary(model)
+```
+
+
+```{r}
+#tiff("figures/fig2a.tiff", height = 5, width = 5, units = "in", res = 300, compression = "lzw")
+# plot(Shannon ~ jitter(Phase, amount = 0.2), data = ps.prev.water.rich, xlim = c(0.5, 3.5), axes = F, xlab = "Phase", ylab = "Shannon Weiner", pch = 16)
+# box()
+# axis(2)
+# axis(1, at = c(1,2,3), labels = c("stimulus", "intermediate", "challenge"))
+# ps.prev.water.rich$Phase <- as.numeric(ps.prev.water.rich$Region)
+# 
+# model <- lmp(Shannon ~ Phase, ps.prev.water.rich)
+# fakeX <- seq(0, 3.5, by = 0.01)
+# predictedY <- predict(model, newdata = data.frame(gut.order = fakeX), se.fit = T)
+# lines(fakeX, predictedY$fit, lwd = 3, col = "blue")
+# lines(fakeX, predictedY$fit + predictedY$se.fit, lwd = 1, lty = 2, col = "blue")
+# lines(fakeX, predictedY$fit - predictedY$se.fit, lwd = 1, lty = 2, col = "blue")
+#dev.off()
+```
+
+```{r}
+ggplot(ps.prev.water.rich, aes(x = Phase, y = Shannon, color = Group)) +
+  theme_bw() +
+  geom_point(size = 1.3, position = position_jitter(width = 0.2), alpha = 0.8) +
+  theme(text = element_text(size = 12)) +
+  labs(y = "Shannon-Weiner", x = "Phase") +
+  scale_color_manual(values = c("#C71585", "#008080")) 
+#ggsave("figures/fig2b.tiff", height = 3, width = 4, units = "in", dpi = 300, compression = "lzw")
+```
+
+```{r}
+ggplot(ps.prev.water.rich, aes(x = Group, y = Shannon, color = Phase)) +
+  theme_bw() +
+  geom_point(size = 1.3, position = position_jitter(width = 0.2), alpha = 0.8) +
+  theme(text = element_text(size = 12)) +
+  labs(y = "Shannon-Weiner", x = "Group") +
+  scale_color_manual(values = c("#FF7F00", "#6A3D9A", "#A6CEE3"))
+#ggsave("figures/fig2c.tiff", height = 3, width = 4, units = "in", dpi = 300, compression = "lzw")
+```
+
+
+Feed
+
+```{r}
+# check if assumption of linear model is met or not
+model <- lm(Shannon ~ Regime, data = ps.prev.feed.rich)
+plot(model)
+# nearly equal variance for each tested group/treatmnet (plot1)
+# linearity of the model is not achieved (plot 2)
+```
+
+```{r}
+step(lmp(Shannon ~ Regime, data = ps.prev.feed.rich))
+```
+
+```{r}
+model <- lmp(Shannon ~ Regime, data = ps.prev.feed.rich)
+summary(model)
+```
+
+
+```{r}
+# run non-paraemtic to chek for the pairwise statitiscal signfincance
+# pyloric (1) is significantly higher from distal (3) **
+# group1	group3	n1=23	n2=34	statistic=574	p=0.003	p.adj=0.008	sig=**
+pairwise_wilcox_test(ps.prev.feed.rich,
+                     Shannon ~ Regime,
+                     p.adjust.method = "BH")
+```
+
+
+
+```{r}
+sessionInfo()
+```
+

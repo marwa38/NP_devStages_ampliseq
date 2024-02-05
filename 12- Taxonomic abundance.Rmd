@@ -1,0 +1,109 @@
+---
+title: "Taxonomic abundance"
+author: "Marwa Tawfik"
+date: "07 07 2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# load libraries
+library("microeco")
+library("file2meco")
+library("ggplot2")
+library("phyloseq")
+```
+
+```{r, include=FALSE}
+ps.prev <- readRDS("phyobjects/STEP 14/ps.prev.f.rds")
+
+# add column Group_Phase
+meta <- as.data.frame(sample_data(ps.prev))
+write.table(meta, "meta_ps.prev.txt", sep = "\t", quote = F, col.names = NA)
+meta1 <- read.table("meta_ps.prev2.txt", header = T, sep = "\t")
+rownames(meta1) <- meta1$X
+meta1 <- meta1[, -1]
+sample_data(ps.prev)$Group <- meta1$Group
+sample_data(ps.prev)$sample_Phase_Group <- meta1$sample_Phase_Group
+sample_data(ps.prev)$MorV <- meta1$MorV
+
+# ordering ----
+# chaning to factors first 
+
+lapply(sample_data(ps.prev)$sample_Phase_Group, class)
+# change characters to factors
+sample_data(ps.prev)$sample_Phase_Group <- as.factor(sample_data(ps.prev)$sample_Phase_Group)
+# rerun again 
+lapply(sample_data(ps.prev)$sample_Phase_Group, class)
+
+lapply(sample_data(ps.prev)$sample_Phase_Group, levels) #example: [[35]] [1] "feed" "gut" "water"
+#if not arranged arrange as follow
+sample_data(ps.prev)$sample_Phase_Group <-
+  factor(sample_data(ps.prev)$sample_Phase_Group, levels = c("intes_stim_M", "intes_stim_V",
+                                                             "intes_interm_M", "intes_interm_V",
+                                                             "intes_chall_M", "intes_chall_V",
+                                                             "feed_M", "feed_V",
+                                                             "wtr_stim_M", "wtr_stim_V",
+                                                             "wtr_interm_M", "wtr_interm_V",
+                                                             "wtr_chall_M", "wtr_chall_V"))
+lapply(sample_data(ps.prev)$sample_Phase_Group, levels)
+sample_data(ps.prev)$sample_Phase_Group #sanity check 
+saveRDS(ps.prev, "phyobjects/STEP 15/ps.prev.f.f.f.rds")
+dataset <- phyloseq2meco(ps.prev)
+#ps.prev.intes <- readRDS("phyobjects/STEP 15/ps.prev.intes.f.rds")
+#dataset.intes <- phyloseq2meco(ps.prev.intes)
+```
+
+```{r}
+# PHYLUM 
+t1 <- trans_abund$new(dataset = dataset, taxrank = "Phylum")
+t1$plot_bar(facet = c("sample", "Phase", "MorV"),
+            others_color = "black",
+            order_x = names(sort(unlist(dataset$taxa_abund$Phylum["k__Bacteria|p__Firmicutes", ])))) + 
+  theme(axis.text.x = element_blank()) +
+  labs(x = "Samples")
+
+ggsave("figures/fig5a.tiff", height = 4, width = 11, units = "in", dpi = 300, compression = "lzw")
+```
+
+```{r}
+t1 <- trans_abund$new(dataset = dataset, taxrank = "Phylum", groupmean = "sample_Phase_Group")
+t1$plot_bar(xtext_angle = 90,
+            others_color = "black") 
+
+ggsave("figures/fig5b.tiff", height = 4, width = 4, units = "in", dpi = 300, compression = "lzw")
+```
+
+```{r}
+# GENUS (family when genus NA)
+# SELECTING those which have NA to replace them 
+na.genus <- is.na(tax_table(ps.prev)[,"Genus"])
+# Replace them with full name consisting of Family and Genus
+tax_table(ps.prev)[na.genus][,"Genus"] <- paste(tax_table(ps.prev)[na.genus][,"Family"], 
+                                                    tax_table(ps.prev)[na.genus][,"Genus"])
+dataset <- phyloseq2meco(ps.prev)
+```
+
+```{r}
+t1 <- trans_abund$new(dataset = dataset, taxrank = "Genus", ntaxa = 20)
+t1$plot_bar(facet = c("sample", "Phase", "MorV"),
+            others_color = "black",
+            order_x = names(sort(unlist(dataset$taxa_abund$Genus["k__Bacteria|p__Firmicutes|c__Clostridia|o__Oscillospirales|f__Ruminococcaceae|g__Ruminococcaceae NA", ])))) + 
+  theme(axis.text.x = element_blank())  +
+  labs(x = "Samples")
+ggsave("figures/fig5c.tiff", height = 4, width = 13, units = "in", dpi = 300, compression = "lzw")
+```
+
+```{r}
+t1 <- trans_abund$new(dataset = dataset, taxrank = "Genus", groupmean = "sample_Phase_Group", ntaxa = 20)
+t1$plot_bar(xtext_angle = 90,
+            others_color = "black") 
+ggsave("figures/fig5d.tiff", height = 4, width = 6, units = "in", dpi = 300, compression = "lzw")
+```
+
+```{r}
+sessionInfo()
+```

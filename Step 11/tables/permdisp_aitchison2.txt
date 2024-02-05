@@ -1,0 +1,17 @@
+Permutation test for homogeneity of multivariate dispersions
+Permutation: free
+Number of permutations: 999
+
+Response: Distances
+           Df Sum Sq Mean Sq      F N.Perm Pr(>F)    
+Groups      2  26477 13238.7 43.998    999  0.001 ***
+Residuals 126  37912   300.9                         
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Pairwise comparisons:
+(Observed p-value below diagonal, permuted p-value above diagonal)
+           intestine       feed water
+intestine            1.0300e-01 0.001
+feed      1.0594e-01            0.001
+water     1.2357e-15 1.0493e-07      

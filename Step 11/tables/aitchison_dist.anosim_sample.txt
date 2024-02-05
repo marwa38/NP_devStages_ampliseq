@@ -1,0 +1,22 @@
+
+Call:
+anosim(x = aitchison_dist, grouping = sample_data(ps.prev.tree)$sample) 
+Dissimilarity: euclidean 
+
+ANOSIM statistic R: 0.9727 
+      Significance: 0.001 
+
+Permutation: free
+Number of permutations: 999
+
+Upper quantiles of permutations (null model):
+  90%   95% 97.5%   99% 
+0.108 0.142 0.165 0.211 
+
+Dissimilarity ranks between and within classes:
+            0%     25%    50%     75% 100%    N
+Between   4539 6177.75 6870.5 7548.25 8256 2628
+intestine    1 1365.75 2733.5 4098.25 5823 5460
+feed      2368 4760.50 5217.0 5270.00 5583   15
+water     4263 5622.00 6509.0 7690.00 7993  153
+

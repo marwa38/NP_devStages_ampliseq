@@ -1,0 +1,200 @@
+---
+title: "Top four phyla"
+author: "Marwa Tawfik"
+date: "07 07 2023"
+output: html_document
+---
+
+Summary
+Proteobacteria and Firmicutes showed the same stat sign as non parametric (without log transformation) 
+Proteobacteria and Firmicutes showed an increasing and drecreasing patterns respectively based on lmp() as the assumptions oflinear models wasn't met 
+Bacteroidota and Actionbacteriota showed no significace (without log transformation) 
+Log transformation showed a worse linear model (although log transformation is known to enhance linearity) and thus stat sig of the linear model is not trustworthy 
+gut order or Region is the same
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# load libraries
+library(tidyverse)
+library(ggplot2)
+library(phyloseq)
+library(lmPerm)
+library(ggpubr)
+```
+
+```{r}
+# import data
+ps.prev <- readRDS("phyobjects/STEP 15/ps.prev.f.f.f.rds")
+ps.prev.intes <- subset_samples(ps.prev, sample == "intestine")
+ps.prev.intes <- prune_taxa(taxa_sums(ps.prev.intes) > 0, ps.prev.intes)
+```
+
+```{r}
+# Top 4 phyla in intestine 
+ps.prev.intes.ra <- transform_sample_counts(ps.prev.intes, function(ASV) ASV/sum(ASV))
+
+ps.prev.phylum.intes <- tax_glom(ps.prev.intes.ra, taxrank = "Phylum")
+
+topPhyl1 <- names(sort(taxa_sums(ps.prev.phylum.intes), decreasing = TRUE))[1:1]
+topPhyl2 <- names(sort(taxa_sums(ps.prev.phylum.intes), decreasing = TRUE))[2:2]
+topPhyl3 <- names(sort(taxa_sums(ps.prev.phylum.intes), decreasing = TRUE))[3:3]
+topPhyl4 <- names(sort(taxa_sums(ps.prev.phylum.intes), decreasing = TRUE))[4:4]
+
+ps.prev.topPhyl1.ra <- prune_taxa(topPhyl1, ps.prev.phylum.intes)
+ps.prev.topPhyl2.ra <- prune_taxa(topPhyl2, ps.prev.phylum.intes)
+ps.prev.topPhyl3.ra <- prune_taxa(topPhyl3, ps.prev.phylum.intes)
+ps.prev.topPhyl4.ra <- prune_taxa(topPhyl4, ps.prev.phylum.intes)
+
+ps.prev.topPhyl1.ra_melt <- ps.prev.topPhyl1.ra %>%
+  psmelt()
+ps.prev.topPhyl2.ra_melt <- ps.prev.topPhyl2.ra %>%
+  psmelt()
+ps.prev.topPhyl3.ra_melt <- ps.prev.topPhyl3.ra %>%
+  psmelt()
+ps.prev.topPhyl4.ra_melt <- ps.prev.topPhyl4.ra %>%
+  psmelt()
+```
+Firmicutes
+
+```{r}
+plot(lm(Abundance ~ Phase * Group, ps.prev.topPhyl1.ra_melt))
+# assumption of linear model not met
+```
+
+```{r}
+summary(lmp(Abundance ~ Phase * Group, ps.prev.topPhyl1.ra_melt))
+```
+
+Proteobacteria
+
+```{r}
+plot(lm(Abundance ~ Phase * Group, ps.prev.topPhyl2.ra_melt))
+# assumption of linear model not met
+```
+
+```{r}
+summary(lmp(Abundance ~ Phase * Group, ps.prev.topPhyl2.ra_melt))
+```
+Actinobacteriota
+```{r}
+plot(lm(Abundance ~ Phase * Group, ps.prev.topPhyl3.ra_melt))
+# assumption of linear model not met
+```
+
+```{r}
+summary(lmp(Abundance ~ Phase * Group, ps.prev.topPhyl3.ra_melt))
+```
+
+Bacteroidota
+```{r}
+plot(lm(Abundance ~ Phase * Group, ps.prev.topPhyl4.ra_melt))
+# assumption of linear model not met
+# I tried also the Regime as I can't use step() to exclude Regime for example as step() is only when liear model assumption are met
+```
+
+```{r}
+summary(lmp(Abundance ~ Phase * Group, ps.prev.topPhyl4.ra_melt))
+```
+Firmicutes and Proteobacteria showed increasing and decreasing trend respectively
+
+
+```{r}
+# 1st 
+ggplot(ps.prev.topPhyl1.ra_melt, aes(x = Phase, y = Abundance, color = Group)) + 
+  geom_point(size = 0.6, position = position_jitterdodge(jitter.width = 0.3, dodge.width = 1)) +
+  theme_bw() +
+  facet_wrap(~Phylum) +
+  labs(y = "Shannon-Weiner", x = "Phase") +
+  #theme(axis.text.x = element_text(angle = 90)) +
+  theme(text = element_text(size = 12), strip.text = element_text(size = 14)) +
+  scale_color_manual(values = c("#C71585", "#008080"), labels = c("M", "V")) +
+  guides(color = guide_legend(title = "Group"))
+ggsave("figures/fig4a.tiff", height = 3, width = 4, units = "in", dpi = 300, compression = "lzw")
+```
+
+```{r}
+#2nd
+ggplot(ps.prev.topPhyl2.ra_melt, aes(x = Phase, y = Abundance, color = Group)) + 
+  geom_point(size = 0.6, position = position_jitterdodge(jitter.width = 0.3, dodge.width = 1)) +
+  theme_bw() +
+  facet_wrap(~Phylum) +
+  labs(y = "Shannon-Weiner", x = "Phase") +
+  #theme(axis.text.x = element_text(angle = 90)) +
+  theme(text = element_text(size = 12), strip.text = element_text(size = 14)) +
+  scale_color_manual(values = c("#C71585", "#008080"), labels = c("M", "V")) +
+  guides(color = guide_legend(title = "Group"))
+ggsave("figures/fig4b.tiff", height = 3, width = 4, units = "in", dpi = 300, compression = "lzw")
+```
+
+```{r}
+#3nd
+ggplot(ps.prev.topPhyl3.ra_melt, aes(x = Phase, y = Abundance, color = Group)) + 
+  geom_point(size = 0.6, position = position_jitterdodge(jitter.width = 0.3, dodge.width = 1)) +
+  theme_bw() +
+  facet_wrap(~Phylum) +
+  labs(y = "Shannon-Weiner", x = "Phase") +
+  #theme(axis.text.x = element_text(angle = 90)) +
+  theme(text = element_text(size = 12), strip.text = element_text(size = 14)) +
+  scale_color_manual(values = c("#C71585", "#008080"), labels = c("M", "V")) +
+  guides(color = guide_legend(title = "Group"))
+ggsave("figures/fig4c.tiff", height = 3, width = 4, units = "in", dpi = 300, compression = "lzw")
+```
+
+```{r}
+#4th
+ggplot(ps.prev.topPhyl4.ra_melt, aes(x = Phase, y = Abundance, color = Group)) + 
+  geom_point(size = 0.6, position = position_jitterdodge(jitter.width = 0.3, dodge.width = 1)) +
+  theme_bw() +
+  facet_wrap(~Phylum) +
+  labs(y = "Shannon-Weiner", x = "Phase") +
+  #theme(axis.text.x = element_text(angle = 90)) +
+  theme(text = element_text(size = 12), strip.text = element_text(size = 14)) +
+  scale_color_manual(values = c("#C71585", "#008080"), labels = c("M", "V")) +
+  guides(color = guide_legend(title = "Group"))
+ggsave("figures/fig4d.tiff", height = 3, width = 4, units = "in", dpi = 300, compression = "lzw")
+```
+
+```{r}
+## stats
+firmicutes <- compare_means(Abundance ~ sample_Phase_Group,
+                                                             group.by = "Phylum",
+                                                             ps.prev.topPhyl1.ra_melt,
+                                                             p.adjust.method = "BH")
+firmicutes
+write.table(firmicutes, file = "tables/firmicutes_compareMeans.txt", sep = "\t")
+```
+
+```{r}
+proteobacteria <- compare_means(Abundance ~ sample_Phase_Group,
+                                                             group.by = "Phylum",
+                                                             ps.prev.topPhyl2.ra_melt,
+                                                             p.adjust.method = "BH")
+proteobacteria
+write.table(proteobacteria, file = "tables/proteobacteria_compareMeans.txt", sep = "\t")
+```
+
+```{r}
+actinobacteriota <- compare_means(Abundance ~ sample_Phase_Group,
+                                                             group.by = "Phylum",
+                                                             ps.prev.topPhyl3.ra_melt,
+                                                             p.adjust.method = "BH")
+actinobacteriota
+write.table(actinobacteriota, file = "tables/actinobacteriota_compareMeans.txt", sep = "\t")
+```
+
+```{r}
+bacteroidota <- compare_means(Abundance ~ sample_Phase_Group,
+                                                             group.by = "Phylum",
+                                                             ps.prev.topPhyl4.ra_melt,
+                                                             p.adjust.method = "BH")
+bacteroidota
+write.table(bacteroidota, file = "tables/bacteroidota_compareMeans.txt", sep = "\t")
+```
+
+```{r}
+sessionInfo()
+```
+

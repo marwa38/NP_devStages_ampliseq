@@ -1,0 +1,274 @@
+---
+title: "<center> Nutritional Programming paper across intestine regions in context of intestinal microbiome <center>"
+author: "<center> Marwa Tawfik <center><br>"
+date: "<center> _`r Sys.Date()`_ <center>"
+output:
+  html_document:
+    code_folding: show
+    df_print: paged
+    theme: yeti
+    highlight: tango
+    toc: yes
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    number_sections: true
+  pdf_document:
+    fig_caption: yes
+    toc: yes
+---
+
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+##Load the required package. Some of these package are not needed here, but are loaded from the previous steps 
+library(Rcpp)
+library(dada2)
+library(phyloseq)
+library(permute)
+library(lattice)
+library(vegan)
+library(ggplot2)
+library(tidyverse)
+library(ggstatsplot)
+library(dplyr)
+library(microbiome)
+library(microbiomeutilities)
+library(knitr)
+library(RColorBrewer)
+library(DT)
+library(cowplot)
+library(ranacapa)
+library(ape)
+library(plotly)
+library(cluster)
+library(pairwiseAdonis)
+library(ggpubr)
+library(gt)
+library(PerformanceAnalytics)
+# the following NOT In the older versino of R (can't in catling updatedR env at the moment)
+library(philr)
+library(venn)
+library(MicrobeR)
+```
+
+```{r}
+## Read the phyloseq object 
+ps.prev <- readRDS("phyobjects/STEP 14/ps.prev.f.rds") # without tree 
+ps.prev.tree <- readRDS( "phyobjects/STEP 16/ps.prev.rooted.rds") # have tree 
+```
+
+####Beta diversity - Robust Aitchison PCA and Phylogenetic Isometric Log-Ratio Transform (PHLR) on full phyloseq object 
+
+#### Roboust Aitchison PCA
+
+##Note that RPCA is not exactly performing PCA. It is performing PCoA using the Aitchison distance, which is calculated from the Euclidean distance of the clr-transformed data. Since PCoA with Euclidean distance is equivalent to PCA, the method is called PCA though it's in fact running PCoA.
+##centered log-ratio transformation of phyloseq object and extraction of principal componenents and variance explained for plotting
+```{r}
+ps_clr <- microbiome::transform(ps.prev.tree, "clr") 
+#check the original phyloseq ps.prev.tree
+phyloseq::otu_table(ps.prev.tree)[10:20, 10:20]
+#check the clr transformed object
+phyloseq::otu_table(ps_clr)[10:20, 10:20]
+#PCA via phyloseq
+ord_clr <- phyloseq::ordinate(ps_clr, "RDA")
+metadata <- data.frame(sample_data(ps.prev.tree), check.names = FALSE)
+```
+
+##Plotting the PCOA for Roboust Aitchison PCA (2D plot)
+```{r}
+pco_aitchison <- as.data.frame(ord_clr$CA$u) %>%
+  rownames_to_column("rownames") %>%
+  full_join(., rownames_to_column(metadata, "rownames"), by = "rownames") 
+labs_aitchison <- paste0("PCo", 1:length(ord_clr$CA$eig), ": ", 
+                     round((100*ord_clr$CA$eig/sum(ord_clr$CA$eig)),1), "%")
+p_aitchison <- ggplot(pco_aitchison, aes(x = PC1, y = PC2, color = Sample_Regime)) +
+  geom_hline(yintercept = 0) +
+  geom_vline(xintercept = 0) +
+  geom_point(size = 4) +
+  labs(title = "PCoA of Roboust Aitchison", color = "Sample_Regime",
+       x = labs_aitchison[1],
+       y = labs_aitchison[2]) +
+  scale_color_manual(values = brewer.pal(n = 12, name = "Paired")[c(5,6,1,2,3,4,9,10,13,7,12,8,14,11)]) +
+  theme_cowplot() +
+  panel_border(colour = "black") 
+p_aitchison
+
+ggsave("figures/p_aitchison.tiff", width = 10, height = 6,
+       units = "in", dpi = 300, compression = "lzw")
+
+# seperate intesFeedWtr (grouped and colored by sample)
+pco_aitchison2 <- as.data.frame(ord_clr$CA$u) %>%
+  rownames_to_column("rownames") %>%
+  full_join(., rownames_to_column(metadata, "rownames"), by = "rownames") 
+labs_aitchison2 <- paste0("PCo", 1:length(ord_clr$CA$eig), ": ", 
+                     round((100*ord_clr$CA$eig/sum(ord_clr$CA$eig)),1), "%")
+p_aitchison2 <- ggplot(pco_aitchison2, aes(x = PC1, y = PC2, color = sample)) +
+  geom_hline(yintercept = 0) +
+  geom_vline(xintercept = 0) +
+  geom_point(size = 4) +
+  labs(title = "PCoA of Roboust Aitchison", color = "sample",
+       x = labs_aitchison[1],
+       y = labs_aitchison[2]) +
+  #scale_color_manual(values = brewer.pal(n = 10, name = "Paired")[c(5,6,1,2,3,4,9,10,8,7)]) +
+  theme_cowplot() +
+  panel_border(colour = "black") 
+p_aitchison2
+
+ggsave("figures/p_aitchison2.tiff", width = 5, height = 4,
+       units = "in", dpi = 300, compression = "lzw")
+
+### Process phylogenetic tree
+##Next we check that the tree is rooted and binary (all multichotomies have been resolved). 
+```{r check_tree, message=FALSE, warning=FALSE}
+is.rooted(phy_tree(pseq_t)) # Is the tree Rooted?
+is.binary.tree(phy_tree(pseq_t)) # All multichotomies resolved?
+
+```
+
+##As the tree is not binary, we use the function `multi2di` from the `ape` package to replace multichotomies with a series of dichotomies with one (or several) branch(es) of zero length. 
+##Since our tree was binary from above, we can omit this step I think. Otherwise do this step
+
+```{r make_binary_tree, message=FALSE, warning=FALSE}
+phy_tree(ps.prev.tree.rare) <- multi2di(phy_tree(ps.prev.tree.rare)) 
+is.binary.tree(phy_tree(ps.prev.tree.rare)) 
+```
+
+##Now we name the internal nodes of the tree so they are easier to work with. We prefix the node number with `n` and thus the root is named `n1`. 
+
+```{r add_prefix, message=FALSE, warning=FALSE}
+phy_tree(pseq_t) <- makeNodeLabel(phy_tree(pseq_t), method = "number", prefix = 'n')
+```
+
+##We note that the tree is already rooted with Bacteria as the outgroup and no multichotomies are present. This uses the function `name.balance` from the `philr` package. This function uses a simple voting scheme to find a consensus naming for the two clades that descend from a given balance. Specifically for a balance named `x/y`, `x` refers to the consensus name of the clade in the numerator of the log-ratio and `y` refers to the denominator. 
+```{r check_branch_name}
+name.balance(phy_tree(pseq_t), tax_table(pseq_t), 'n1')
+name.balance(phy_tree(pseq_t), tax_table(pseq_t), 'n10')
+```
+## permutational multivariate analysis of variance (PERMANOVA) test for the four beta-diversity distances on rarified and full phyloseq objects
+
+```{r}
+##Compute aitchison distance 
+aitchison_dist <- phyloseq::distance(ps_clr, method = "euclidean")
+##PERMANOVA for the aitchison distance
+aitchison_dist_adonis <- vegan::adonis(aitchison_dist ~ phyloseq::sample_data(ps.prev.tree)$Sample_Regime)
+summary.output_aitchison_dist_adonis <- capture.output(summary(aitchison_dist_adonis))
+writeLines(summary.output_aitchison_dist_adonis, "tables/aitchison_dist_adonis.txt")
+write.table(aitchison_dist_adonis$aov.tab, "tables/aitchison_dist_aov.tab.adonis.tsv", sep = "\t", quote=F, col.names=NA)
+# by sample
+aitchison_dist_adonis2 <- vegan::adonis(aitchison_dist ~ phyloseq::sample_data(ps.prev.tree)$sample)
+summary.output_aitchison_dist_adonis2 <- capture.output(summary(aitchison_dist_adonis2))
+writeLines(summary.output_aitchison_dist_adonis2, "tables/aitchison_dist_adonis_sample.txt")
+write.table(aitchison_dist_adonis2$aov.tab, "tables/aitchison_dist_aov.tab.adonis_sample.tsv", sep = "\t", quote=F, col.names=NA)
+# by sample
+aitchison_dist.anosim2 <- anosim(aitchison_dist, sample_data(ps.prev.tree)$sample)
+summary.output <- capture.output(summary(aitchison_dist.anosim2))
+writeLines(summary.output, "tables/aitchison_dist.anosim_sample.txt")
+
+# intesWtr
+ps.prev.intesWtr <- subset_samples(ps.prev.tree, sample == "intestine" | sample == "water")
+ps.prev.intesWtr <- prune_taxa(taxa_sums(ps.prev.intesWtr) > 0, ps.prev.intesWtr)
+ps_clr.intesWtr <- microbiome::transform(ps.prev.intesWtr, "clr") 
+aitchison_dist.intesWtr <- phyloseq::distance(ps_clr.intesWtr, method = "euclidean")
+
+# intesFeed
+ps.prev.intesFeed <- subset_samples(ps.prev.tree, sample == "intestine" | sample == "feed")
+ps.prev.intesFeed <- prune_taxa(taxa_sums(ps.prev.intesFeed) > 0, ps.prev.intesFeed)
+ps_clr.intesFeed <- microbiome::transform(ps.prev.intesFeed, "clr")
+aitchison_dist.intesFeed <- phyloseq::distance(ps_clr.intesFeed, method = "euclidean")
+
+# WtrFeed
+ps.prev.WtrFeed <- subset_samples(ps.prev.tree, sample == "water" | sample == "feed")
+ps.prev.WtrFeed <- prune_taxa(taxa_sums(ps.prev.WtrFeed) > 0, ps.prev.WtrFeed)
+ps_clr.WtrFeed <- microbiome::transform(ps.prev.WtrFeed, "clr")
+aitchison_dist.WtrFeed <- phyloseq::distance(ps_clr.WtrFeed, method = "euclidean")
+
+##Compute aitchison distance 
+aitchison_dist.intes <- phyloseq::distance(ps_clr.intes, method = "euclidean")
+##PERMANOVA for the aitchison distance
+aitchison_dist.intes_adonis <- vegan::adonis(aitchison_dist.intes ~ phyloseq::sample_data(ps.prev.intes.tree)$Regime)
+summary.output_aitchison_dist.intes_adonis <- capture.output(summary(aitchison_dist.intes_adonis))
+writeLines(summary.output_aitchison_dist.intes_adonis, "tables/aitchison_dist.intes_adonis.txt")
+write.table(aitchison_dist.intes_adonis$aov.tab, "tables/aitchison_dist.intes_aov.tab.adonis.tsv", sep = "\t", quote=F, col.names=NA)
+```
+
+## with the script in the preceeding chunks, we have shown with PERMANOVA test that there is significance difference (P < 0.001 ***) four the four beta diversity indices, now here we are interested in pairwise comparison to figure out how each diet differs from one another. In this particular study, the dietary consist of a negative control (FM), a positive control (SBM) and four other diets containing SBM with yeasts (ICJ, ACJ, IWA, and AWA). for this comparison, we will compare the four treatment with the two control diets. However, if you are interested in comparing all the diets the codes are also written in the chunks 
+#PERMANOVA pariwise comparison for unweighted unifrac distance
+
+#PERMANOVA pariwise comparison for Robust aitchison distance
+```{r}
+##PERMANOVA pariwise comparison for Robust aitchison distance
+pw_aitchison_full <- pairwise.adonis(aitchison_dist, pco_aitchison$Sample_Regime)  
+# export data as excel file
+write.csv(pw_aitchison_full, file = "tables/PERMANOVA for Robust aitchison distance.csv", row.names = FALSE)
+```
+
+#PERMANOVA pariwise comparison for Robust aitchison distance BY SAMPLE
+```{r}
+##PERMANOVA pariwise comparison for Robust aitchison distance
+pw_aitchison_full_sample <- pairwise.adonis(aitchison_dist, pco_aitchison2$sample)  
+# export data as excel file
+write.csv(pw_aitchison_full_sample, file = "tables/PERMANOVA for Robust aitchison distance_sample.csv", row.names = FALSE)
+```
+
+#Since the PERMANOVA is testing differences in both location and dispersion effects, it's important to test the homogeneity of multivariate dispersions following a significant PERMANVOA result.The homogeneity of multivariate dispersions can be assessed visually (PCoA plot/boxplot) or via a statistical test called PERMDISP, which is implemented in R by the `betadisper()` function from the *vegan* package.
+## Robust aitchison distance
+```{r}
+dispr_aitchison <- vegan::betadisper(aitchison_dist, phyloseq::sample_data(ps.prev.tree)$Sample_Regime, type = "median")
+dispr_aitchison # saved the output manually!
+
+#by sample 
+dispr_aitchison2 <- vegan::betadisper(aitchison_dist, phyloseq::sample_data(ps.prev.tree)$sample, type = "median")
+dispr_aitchison2
+
+# Permutaion test
+permdisp_aitchison <- permutest(dispr_aitchison, pairwise = TRUE, permutations = 999)
+permdisp_aitchison # saved the output manually!
+#by sample
+permdisp_aitchison2 <- permutest(dispr_aitchison2, pairwise = TRUE, permutations = 999)
+permdisp_aitchison2
+
+#Visual inspection
+```{r}
+#PCOA plot showing the distance to centroid for each group
+tiff("figures/Aitchison.tiff", units = "in", res = 800, width = 10, height = 6, compression = "lzw")
+pc_aitchison <- plot(dispr_aitchison, main = "Ordination Centroids and Dispersion Labeled: Robust Aitchison distance", sub = "")
+dev.off()
+#Box plot showing the distance to centroid for each group
+bp_aitchison<- data.frame(dist = dispr_aitchison$distances, group = dispr_aitchison$group) %>%
+  ggplot(aes(x = group, y = dist)) +
+    geom_boxplot(aes(fill =  group)) +
+    labs(x = "Sample_Regime", y = "Distance to centroid", 
+         title = "Robust Aitchison distance", fill = "Sample_Regime") +
+    theme_minimal(base_size = 14) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    theme(axis.text.x = element_text(angle = 90))
+bp_aitchison
+ggsave("figures/bp_aitchison.tiff", width = 10, height = 6,
+       units = "in", dpi = 300, compression = "lzw")
+
+# intesFeedWtr by sample 
+tiff("figures/Aitchison_sample.tiff", units = "in", res = 800, width = 5, height = 5, compression = "lzw")
+pc_aitchison2 <- plot(dispr_aitchison2, main = "Ordination Centroids and Dispersion", sub = "")
+dev.off()
+#Box plot showing the distance to centroid for each group
+bp_aitchison2<- data.frame(dist = dispr_aitchison2$distances, group = dispr_aitchison2$group) %>%
+  ggplot(aes(x = group, y = dist)) +
+    geom_boxplot(aes(color =  group)) +
+    labs(x = "sample", y = "Distance to centroid", 
+         title = "Robust Aitchison distance", color = "sample") +
+    theme_minimal(base_size = 14) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    theme(axis.text.x = element_blank())
+bp_aitchison2
+ggsave("figures/bp_aitchison2.tiff", width = 5, height = 4,
+       units = "in", dpi = 300, compression = "lzw")
+```
+
+```{r}
+sessionInfo()
+```

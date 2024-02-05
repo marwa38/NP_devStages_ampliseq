@@ -1,0 +1,239 @@
+---
+title: "Beta diversity"
+author: "Marwa Tawfik"
+date: "07 07 2023"
+output: html_document
+---
+
+Summary: I found PERMANVOA showed sign difference between stim vs interm or chall regardless of Group of fish, but when I split each group of fish I found pairwise adonis showed sig diff bet stim vs interm and cahll while for M fish interma vs chall comparison were different whereas in V fish they were similar. Same results I got for ANOSIM. For interacttion bet group and phase, PERMANVOA didn't get sig diff although I got sig diff for each sepertately (ANOSIM showed sig interaction diff). Permutation tests on betadispersion showed that stim sign diff from either interm or chall (either or both fish groups) but interm and chall showed no sig difference.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# load libraries ----
+library(tidyverse)
+library(vegan)
+library(phyloseq)
+library(EcolUtils)
+```
+
+```{r}
+# import data
+ps.prev.intes <- readRDS("phyobjects/STEP 15/ps.prev.intes.f.f.rds")
+```
+
+```{r}
+# log transform 
+ps.prev.intes.log <- transform_sample_counts(ps.prev.intes, function(x) log(1 + x))
+```
+
+```{r}
+# dataframe for metadata
+meta.ps.prev.intes.log <- as(sample_data(ps.prev.intes.log), "data.frame")
+```
+
+
+PERMANVOA for stat
+
+Global stat
+```{r}
+# M vs V at all phases
+ps.prev.intes.log.glAdon <- adonis2(distance(ps.prev.intes.log, method="bray") ~ Phase, data = meta.ps.prev.intes.log)
+ps.prev.intes.log.glAdon
+```
+
+```{r}
+dist.bray.intes.log <- phyloseq::distance(ps.prev.intes.log, method = "bray")
+dispr_bray <- vegan::betadisper(dist.bray.intes.log, phyloseq::sample_data(ps.prev.intes.log)$Phase, type = "median")
+dispr_bray # saved the output manually!
+# Permutaion test
+permdisp_bray <- permutest(dispr_bray, pairwise = TRUE, permutations = 999)
+permdisp_bray # saved the output manually!
+```
+
+```{r}
+# stiulus vs intermediate vs challenge
+# Mfish 
+ps.prev.intes.Mfish <- subset_samples(ps.prev.intes, Group == "M fish")
+ps.prev.intes.Mfish <- prune_taxa(taxa_sums(ps.prev.intes.Mfish) > 0, ps.prev.intes.Mfish)
+ps.prev.intes.Mfish.log <- transform_sample_counts(ps.prev.intes.Mfish, function(x) log(1 + x))
+meta.ps.prev.intes.Mfish.log <- as(sample_data(ps.prev.intes.Mfish.log), "data.frame")
+dist.bray.intes.Mfish.log <- phyloseq::distance(ps.prev.intes.Mfish.log, method = "bray")
+ps.prev.intes.Mfish.log.adonis <- adonis2(distance(ps.prev.intes.Mfish.log, method="bray") ~ Phase, data = meta.ps.prev.intes.Mfish.log)
+ps.prev.intes.Mfish.log.adonis
+```
+
+```{r}
+# stiulus vs intermediate vs challenge
+# Vfish 
+ps.prev.intes.Vfish <- subset_samples(ps.prev.intes, Group == "V fish")
+ps.prev.intes.Vfish <- prune_taxa(taxa_sums(ps.prev.intes.Vfish) > 0, ps.prev.intes.Vfish)
+ps.prev.intes.Vfish.log <- transform_sample_counts(ps.prev.intes.Vfish, function(x) log(1 + x))
+meta.ps.prev.intes.Vfish.log <- as(sample_data(ps.prev.intes.Vfish.log), "data.frame")
+dist.bray.intes.Vfish.log <- phyloseq::distance(ps.prev.intes.Vfish.log, method = "bray")
+ps.prev.intes.Vfish.log.adonis <- adonis2(distance(ps.prev.intes.Vfish.log, method="bray") ~ Phase, data = meta.ps.prev.intes.Vfish.log)
+ps.prev.intes.Vfish.log.adonis
+```
+
+```{r}
+dispr_bray.Vfish <- vegan::betadisper(dist.bray.intes.Vfish.log, phyloseq::sample_data(ps.prev.intes.Vfish.log)$Phase, type = "median")
+dispr_bray.Vfish # saved the output manually!
+# Permutaion test
+permdisp_bray.Vfish <- permutest(dispr_bray.Vfish, pairwise = TRUE, permutations = 999)
+permdisp_bray.Vfish # saved the output manually!
+```
+
+```{r}
+# Interaction of Phase and Group
+meta.ps.prev.intes.log$Group <- factor(meta.ps.prev.intes.log$Group) # change character to facto so I can run 
+class(meta.ps.prev.intes.log$Group) #factor
+# PERMANOVA
+adonis2(dist.bray.intes.log ~ Group * Phase, data = meta.ps.prev.intes.log)
+# Permutation test for adonis under reduced model
+# Terms added sequentially (first to last)
+# Permutation: free
+# Number of permutations: 999
+# 
+# adonis2(formula = dist.bray.intes.log ~ Group * Phase, data = meta.ps.prev.intes.log)
+#              Df SumOfSqs      R2      F Pr(>F)    
+# Group         1    0.541 0.01658 1.9976  0.020 *  
+# Phase         2    4.621 0.14154 8.5251  0.001 ***
+# Group:Phase   2    0.655 0.02006 1.2080  0.138    
+# Residual     99   26.834 0.82182                  
+# Total       104   32.652 1.00000                  
+# ---
+# Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+```
+Pairwise 
+```{r}
+dist.bray.intes.log <- phyloseq::distance(ps.prev.intes.log, method = "bray")
+dist.bray.intes.log.adonis <- adonis.pair(dist.bray.intes.log, meta.ps.prev.intes.log$Phase)
+# or class(sample_data(ps.prev.intes.log)$Group) # but change to factor fist 
+dist.bray.intes.log.adonis
+```
+
+M fish
+```{r}
+dist.bray.intes.Mfish.log <- phyloseq::distance(ps.prev.intes.Mfish.log, method = "bray")
+dist.bray.intes.Mfish.log.adonis <- adonis.pair(dist.bray.intes.Mfish.log, sample_data(ps.prev.intes.Mfish)$Phase)
+dist.bray.intes.Mfish.log.adonis
+```
+
+V fish
+```{r}
+dist.bray.intes.Vfish.log <- phyloseq::distance(ps.prev.intes.Vfish.log, method = "bray")
+dist.bray.intes.Vfish.log.adonis <- adonis.pair(dist.bray.intes.Vfish.log, sample_data(ps.prev.intes.Vfish)$Phase)
+dist.bray.intes.Vfish.log.adonis
+```
+
+
+```{r}
+# intestine Mfish subset ----
+ps.prev.intes.Mfish <- subset_samples(ps.prev.intes, Group == "M fish")
+
+ps.prev.intes.Mfish <- prune_taxa(taxa_sums(ps.prev.intes.Mfish) > 0, ps.prev.intes.Mfish)                                  
+ps.prev.intes.Mfish.log <- transform_sample_counts(ps.prev.intes.Mfish, function(x) log(1 + x))
+out.brayPCoA.intes.Mfish.log <- ordinate(ps.prev.intes.Mfish.log, method = "PCoA", distance = "bray")
+plot_ordination(ps.prev.intes.Mfish.log, out.brayPCoA.intes.Mfish.log, color = "Phase") +
+  theme_classic() +
+  #labs(title = "PCoA of Bray Curtis Distances of Mfish regime") +
+  theme(
+    strip.background = element_blank(),
+    axis.text = element_text(size = 15),
+    axis.title = element_text(size = 16),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10)),
+    legend.text = element_text(size = 16),
+    legend.title = element_text(size = 16)) +
+  coord_equal() +
+  geom_point(size = 3.5, aes(shape = Group)) +  # Set the shape aesthetic
+  scale_color_manual(values = c("#FF7F00", "#6A3D9A", "#A6CEE3")) +
+  scale_shape_manual(values = c(16, 3))  +
+  labs(shape = "Group") + # Set the shape values
+  #scale_color_viridis_d(option = "C") #+
+  stat_ellipse(level = 0.75)
+
+ggsave("figures/fig2a.tiff", height = 5, width = 10, units = "in", dpi = 300, compression = "lzw")
+```
+
+```{r}
+# intestine Vfish subset ----
+ps.prev.intes.Vfish <- subset_samples(ps.prev.intes, Group == "V fish")
+
+ps.prev.intes.Vfish <- prune_taxa(taxa_sums(ps.prev.intes.Vfish) > 0, ps.prev.intes.Vfish)                                  
+ps.prev.intes.Vfish.log <- transform_sample_counts(ps.prev.intes.Vfish, function(x) log(1 + x))
+out.brayPCoA.intes.Vfish.log <- ordinate(ps.prev.intes.Vfish.log, method = "PCoA", distance = "bray")
+plot_ordination(ps.prev.intes.Vfish.log, out.brayPCoA.intes.Vfish.log, color = "Phase") +
+  theme_classic() +
+  #labs(title = "PCoA of Bray Curtis Distances of Vfish regime") +
+  theme(
+    strip.background = element_blank(),
+    axis.text = element_text(size = 15),
+    axis.title = element_text(size = 16),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10)),
+    legend.text = element_text(size = 16),
+    legend.title = element_text(size = 16)) +
+  coord_equal() +
+  geom_point(size = 3.5, aes(shape = Group)) +  # Set the shape aesthetic
+  scale_color_manual(values = c("#FF7F00", "#6A3D9A", "#A6CEE3")) +
+  scale_shape_manual(values = c(3, 16))  +
+  labs(shape = "Group") + # Set the shape values
+  #scale_color_viridis_d(option = "C") #+
+  stat_ellipse(level = 0.75)
+
+ggsave("figures/fig2b.tiff", height = 5, width = 10, units = "in", dpi = 300, compression = "lzw")
+```
+
+
+```{r}
+ps.prev.intes.log.interAdonis <- adonis2(distance(ps.prev.intes.log, method="bray") ~ Phase * Group, data = meta.ps.prev.intes.log)
+ps.prev.intes.log.interAdonis
+# Permutation test for adonis under reduced model
+# Terms added sequentially (first to last)
+# Permutation: free
+# Number of permutations: 999
+# 
+# adonis2(formula = distance(ps.prev.intes.log, method = "bray") ~ Phase * Group, data = meta.ps.prev.intes.log)
+#              Df SumOfSqs      R2      F Pr(>F)    
+# Phase         2    4.638 0.14204 8.5552  0.001 ***
+# Group         1    0.525 0.01608 1.9373  0.026 *  
+# Phase:Group   2    0.655 0.02006 1.2080  0.133    
+# Residual     99   26.834 0.82182                  
+# Total       104   32.652 1.00000                  
+# ---
+# Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+```
+
+
+```{r}
+ps.prev.intermChall.log <- subset_samples(ps.prev.intes.log, !Phase == "stimulus")
+ps.prev.intermChall.log <- prune_taxa(taxa_sums(ps.prev.intermChall.log) > 0, ps.prev.intermChall.log)
+meta.ps.prev.intermChall.log <- as(sample_data(ps.prev.intermChall.log), "data.frame")
+
+
+ps.prev.intermChall.log.adonis <- adonis2(distance(ps.prev.intermChall.log, method="bray") ~ Phase * Group, data = meta.ps.prev.intermChall.log)
+ps.prev.intermChall.log.adonis
+# Permutation test for adonis under reduced model
+# Terms added sequentially (first to last)
+# Permutation: free
+# Number of permutations: 999
+# 
+# adonis2(formula = distance(ps.prev.intermChall.log, method = "bray") ~ Phase * Group, data = meta.ps.prev.intermChall.log)
+#             Df SumOfSqs      R2      F Pr(>F)    
+# Phase        1   0.8023 0.03905 2.8222  0.001 ***
+# Group        1   0.6573 0.03199 2.3121  0.003 ** 
+# Phase:Group  1   0.3228 0.01571 1.1357  0.246    
+# Residual    66  18.7621 0.91324                  
+# Total       69  20.5444 1.00000                  
+# ---
+# Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+```
+
+
+```{r}
+sessionInfo()
+```
+
