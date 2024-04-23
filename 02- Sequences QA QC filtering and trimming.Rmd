@@ -1,6 +1,6 @@
 ---
-title: "<center> Nutritional Programming paper across developmental stages in context of intestinal microbiome <center>"
-author: "<center> Marwa Tawfik <center><br>"
+title: "NP_devStages_ampliseq"
+author: "Marwa Tawfik"
 date: "<center> _`r Sys.Date()`_ <center>"
 output:
   html_document:
