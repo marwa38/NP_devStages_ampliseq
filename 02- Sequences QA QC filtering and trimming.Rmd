@@ -1,5 +1,6 @@
 ---
-title: "NP_devStages_ampliseq"
+summary: "Sequences QA QC filtering and trimming"
+summary: "NP_devStages_ampliseq"
 author: "Marwa Tawfik"
 date: "<center> _`r Sys.Date()`_ <center>"
 output:
