@@ -1,0 +1,2203 @@
+##Load the required packages
+```{r}
+library(tidyverse)
+library(cowplot)  
+library(patchwork)  
+library(ggh4x) 
+##library(ggtext) 
+library(PerformanceAnalytics) 
+library(RColorBrewer) 
+#library(MicrobeR)  
+library(microbiome) 
+##library(speedyseq) 
+library(flextable)   
+##library(webshot2) 
+library(officer)      
+library(DT) 
+library(ggsignif)
+library(Rcpp)
+library(dada2)
+library(phyloseq)
+library(permute)
+library(lattice)
+library(vegan)
+library(ggplot2)
+library(tidyverse)
+library(ggstatsplot)
+library(dplyr)
+library(tidyr)
+library(microbiome)
+library(microbiomeutilities)
+library(knitr)
+library(RColorBrewer)
+library(DT)
+library(gt)
+library(cowplot)
+library(PerformanceAnalytics)
+#library(venn)
+#library(philr)
+#library(MicrobeR)
+library(ape)
+library(Biostrings)
+library(gridExtra)
+library(ggsignif)
+library(lmerTest) 
+library(ggResidpanel) 
+library(emmeans)
+library(picante)
+set.seed(1910)
+library(ggpubr)
+```
+
+
+##Set the working driectory and read the saved phyloseq object
+```{r}
+ps.prev <- readRDS("phyobjects/STEP 14/ps.prev.f.rds")
+ps.prev.intes <- readRDS("phyobjects/STEP 15/ps.prev.intes.f.rds") 
+ps.prev.feed <- readRDS("phyobjects/STEP 15'/ps.prev.feed.f.rds") 
+ps.prev.water <- readRDS("phyobjects/STEP 15'/ps.prev.water.f.rds") 
+
+# # filter samples
+# ps.prev <- ps.prev %>%
+#   # remove the control samples
+#   subset_samples(!Sample_type %in% c("control", "Positive_control"))
+
+# change OTU names for easy display
+indx <- formatC(1:ntaxa(ps.prev), width = nchar(ntaxa(ps.prev)), format = "d", flag = "0")
+taxa_names(ps.prev) <- paste0("OTU", indx)
+# extract otu table, taxonomy and metadata
+otu <- as.data.frame(t(otu_table(ps.prev))) 
+txnm <- tax_table(ps.prev) %>% as("matrix") %>% as_tibble(rownames = NA)
+mtd <- data.frame(sample_data(ps.prev), check.names = FALSE)
+
+# intes
+indx.intes <- formatC(1:ntaxa(ps.prev.intes), width = nchar(ntaxa(ps.prev.intes)), format = "d", flag = "0")
+taxa_names(ps.prev.intes) <- paste0("OTU", indx.intes)
+# extract otu.intes table, taxonomy and metadata
+otu.intes <- as.data.frame(t(otu_table(ps.prev.intes))) 
+txnm.intes <- tax_table(ps.prev.intes) %>% as("matrix") %>% as_tibble(rownames = NA)
+mtd.intes <- data.frame(sample_data(ps.prev.intes), check.names = FALSE)
+
+# feed
+indx.feed <- formatC(1:ntaxa(ps.prev.feed), width = nchar(ntaxa(ps.prev.feed)), format = "d", flag = "0")
+taxa_names(ps.prev.feed) <- paste0("OTU", indx.feed)
+# extract otu.feed table, taxonomy and metadata
+otu.feed <- as.data.frame(t(otu_table(ps.prev.feed))) 
+txnm.feed <- tax_table(ps.prev.feed) %>% as("matrix") %>% as_tibble(rownames = NA)
+mtd.feed <- data.frame(sample_data(ps.prev.feed), check.names = FALSE)
+
+# water 
+indx.water <- formatC(1:ntaxa(ps.prev.water), width = nchar(ntaxa(ps.prev.water)), format = "d", flag = "0")
+taxa_names(ps.prev.water) <- paste0("OTU", indx.water)
+# extract otu.water table, taxonomy and metadata
+otu.water <- as.data.frame(t(otu_table(ps.prev.water))) 
+txnm.water <- tax_table(ps.prev.water) %>% as("matrix") %>% as_tibble(rownames = NA)
+mtd.water <- data.frame(sample_data(ps.prev.water), check.names = FALSE)
+```
+
+# Taxonomic assignment overview
+
+First of all, let's look at the coverage of taxonomic assignments at different rank levels.
+```{r}
+txnm_assg <- txnm %>%
+  gather("Rank", "Name", rank_names(ps.prev)) %>%
+  group_by(Rank) %>%
+  # Empty taxonomic ranks may be na or strings containing "uncultured" or "Ambiguous_taxa"
+  summarize(OTUs_classified = sum(!is.na(Name) & !grepl("uncultured|Ambiguous|metagenome", Name))) %>%
+  mutate(
+    Frac_classified = OTUs_classified / ntaxa(ps.prev),
+    Frac_classified = ifelse(
+      Frac_classified == 1, 
+      "100", 
+      round(Frac_classified * 100, 1)),
+    Frac_classified = paste(Frac_classified, "%"),
+    Rank = factor(Rank, rank_names(ps.prev))) %>%
+  arrange(Rank) 
+txnm_assg %>%
+  datatable(options = list(columnDefs = list(list(className = 'dt-left', targets = c(0:3)))))
+	Rank	OTUs_classified	Frac_classified
+1	Kingdom	4988	100 %
+2	Phylum	4988	100 %
+3	Class	4988	100 %
+4	Order	4988	100 %
+5	Family	4988	100 %
+6	Genus	3914	78.5 %
+7	Species	482	9.7 %
+# intes
+txnm.intes_assg <- txnm.intes %>%
+  gather("Rank", "Name", rank_names(ps.prev.intes)) %>%
+  group_by(Rank) %>%
+  # Empty taxonomic ranks may be na or strings containing "uncultured" or "Ambiguous_taxa"
+  summarize(OTUs_classified = sum(!is.na(Name) & !grepl("uncultured|Ambiguous|metagenome", Name))) %>%
+  mutate(
+    Frac_classified = OTUs_classified / ntaxa(ps.prev.intes),
+    Frac_classified = ifelse(
+      Frac_classified == 1, 
+      "100", 
+      round(Frac_classified * 100, 1)),
+    Frac_classified = paste(Frac_classified, "%"),
+    Rank = factor(Rank, rank_names(ps.prev.intes))) %>%
+  arrange(Rank) 
+txnm.intes_assg %>%
+  datatable(options = list(columnDefs = list(list(className = 'dt-left', targets = c(0:3)))))
+	Rank	OTUs_classified	Frac_classified
+1	Kingdom	2150	100 %
+2	Phylum	2150	100 %
+3	Class	2150	100 %
+4	Order	2150	100 %
+5	Family	2150	100 %
+6	Genus	1780	82.8 %
+7	Species	273	12.7 %
+# water
+txnm.water_assg <- txnm.water %>%
+  gather("Rank", "Name", rank_names(ps.prev.water)) %>%
+  group_by(Rank) %>%
+  # Empty taxonomic ranks may be na or strings containing "uncultured" or "Ambiguous_taxa"
+  summarize(OTUs_classified = sum(!is.na(Name) & !grepl("uncultured|Ambiguous|metagenome", Name))) %>%
+  mutate(
+    Frac_classified = OTUs_classified / ntaxa(ps.prev.water),
+    Frac_classified = ifelse(
+      Frac_classified == 1, 
+      "100", 
+      round(Frac_classified * 100, 1)),
+    Frac_classified = paste(Frac_classified, "%"),
+    Rank = factor(Rank, rank_names(ps.prev.water))) %>%
+  arrange(Rank) 
+txnm.water_assg %>%
+  datatable(options = list(columnDefs = list(list(className = 'dt-left', targets = c(0:3)))))
+	Rank	OTUs_classified	Frac_classified
+1	Kingdom	2474	100 %
+2	Phylum	2474	100 %
+3	Class	2474	100 %
+4	Order	2474	100 %
+5	Family	2474	100 %
+6	Genus	1818	73.5 %
+7	Species	156	6.3 %
+# feed
+txnm.feed_assg <- txnm.feed %>%
+  gather("Rank", "Name", rank_names(ps.prev.feed)) %>%
+  group_by(Rank) %>%
+  # Empty taxonomic ranks may be na or strings containing "uncultured" or "Ambiguous_taxa"
+  summarize(OTUs_classified = sum(!is.na(Name) & !grepl("uncultured|Ambiguous|metagenome", Name))) %>%
+  mutate(
+    Frac_classified = OTUs_classified / ntaxa(ps.prev.feed),
+    Frac_classified = ifelse(
+      Frac_classified == 1, 
+      "100", 
+      round(Frac_classified * 100, 1)),
+    Frac_classified = paste(Frac_classified, "%"),
+    Rank = factor(Rank, rank_names(ps.prev.feed))) %>%
+  arrange(Rank) 
+txnm.feed_assg %>%
+  datatable(options = list(columnDefs = list(list(className = 'dt-left', targets = c(0:3)))))
+	Rank	OTUs_classified	Frac_classified
+1	Kingdom	1119	100 %
+2	Phylum	1119	100 %
+3	Class	1119	100 %
+4	Order	1119	100 %
+5	Family	1119	100 %
+6	Genus	986	88.1 %
+7	Species	203	18.1 %
+```
+
+
+## Biological samples
+
+### Top15 genera
+
+```{r}
+taxa_tab <- Summarize.Taxa(otu, txnm)$Genus %>% Make.Percent() 
+taxa_tab <- taxa_tab[order(rowMeans(taxa_tab), decreasing = T), ]
+Others <- colSums(taxa_tab[16:nrow(taxa_tab), ])
+taxa_tab <- rbind(taxa_tab[1:15, ], Others)
+
+# intes
+taxa_tab.intes <- Summarize.Taxa(otu.intes, txnm.intes)$Genus %>% Make.Percent() 
+taxa_tab.intes <- taxa_tab.intes[order(rowMeans(taxa_tab.intes), decreasing = T), ]
+OTHERS <- colSums(taxa_tab.intes[16:nrow(taxa_tab.intes), ])
+taxa_tab.intes <- rbind(taxa_tab.intes[1:15, ], OTHERS)
+
+# feed
+taxa_tab.feed <- Summarize.Taxa(otu.feed, txnm.feed)$Genus %>% Make.Percent() 
+taxa_tab.feed <- taxa_tab.feed[order(rowMeans(taxa_tab.feed), decreasing = T), ]
+others <- colSums(taxa_tab.feed[16:nrow(taxa_tab.feed), ])
+taxa_tab.feed <- rbind(taxa_tab.feed[1:15, ], others)
+
+# water
+taxa_tab.water <- Summarize.Taxa(otu.water, txnm.water)$Genus %>% Make.Percent() 
+taxa_tab.water <- taxa_tab.water[order(rowMeans(taxa_tab.water), decreasing = T), ]
+OTHERs <- colSums(taxa_tab.water[16:nrow(taxa_tab.water), ])
+taxa_tab.water <- rbind(taxa_tab.water[1:15, ], OTHERs)
+```
+
+
+Tidy taxa table for making stacked box plots.
+
+```{r}
+taxa_tab <- as.data.frame(taxa_tab) %>%
+  rownames_to_column("Taxa") %>%
+  separate(
+    Taxa, 
+    sep = ";", 
+    c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")) %>% 
+  mutate(
+    Phylum = ifelse(
+      is.na(Phylum)|Phylum == "NA"|grepl("uncultured|Ambiguous|metagenome", Phylum), 
+      Kingdom, 
+      Phylum),
+    Class = ifelse(
+      is.na(Class)|Class == "NA"|grepl("uncultured|Ambiguous|metagenome", Class), 
+      Phylum, 
+      Class),
+    Order = ifelse(
+      is.na(Order)|Order == "NA"|grepl("uncultured|Ambiguous|metagenome", Order), 
+      Class, 
+      Order),
+    Family = ifelse(
+      is.na(Family)|Family == "NA"|grepl("uncultured|Ambiguous|metagenome", Family), 
+      Order, 
+      Family),
+    Genus = ifelse(
+      is.na(Genus)|Genus == "NA"|grepl("uncultured|Ambiguous|metagenome", Genus), 
+      Family, 
+      Genus)) %>%
+  select(-Kingdom, -(Class:Family))
+taxa_tab1 <- taxa_tab %>%
+  mutate(
+    Phylum = gsub("p__", "", Phylum),
+    Phylum = factor(Phylum, levels = rev(unique(Phylum))),
+    Genus = gsub("g__", "", Genus),
+    Genus = factor(Genus, levels = rev(unique(Genus)))) %>%
+  arrange(Phylum, Genus) %>%
+  mutate(Genus = factor(Genus, levels = unique(Genus))) %>%
+  pivot_longer(-c(Phylum, Genus), names_to = "SampleID", values_to = "Abundance") %>%
+  inner_join(rownames_to_column(mtd, "SampleID"), by = "SampleID")
+openxlsx::write.xlsx(taxa_tab1, file = "tables/taxatable for intestine.xlsx")
+
+# intes
+taxa_tab.intes <- as.data.frame(taxa_tab.intes) %>%
+  rownames_to_column("Taxa.intes") %>%
+  separate(
+    Taxa.intes, 
+    sep = ";", 
+    c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")) %>% 
+  mutate(
+    Phylum = ifelse(
+      is.na(Phylum)|Phylum == "NA"|grepl("uncultured|Ambiguous|metagenome", Phylum), 
+      Kingdom, 
+      Phylum),
+    Class = ifelse(
+      is.na(Class)|Class == "NA"|grepl("uncultured|Ambiguous|metagenome", Class), 
+      Phylum, 
+      Class),
+    Order = ifelse(
+      is.na(Order)|Order == "NA"|grepl("uncultured|Ambiguous|metagenome", Order), 
+      Class, 
+      Order),
+    Family = ifelse(
+      is.na(Family)|Family == "NA"|grepl("uncultured|Ambiguous|metagenome", Family), 
+      Order, 
+      Family),
+    Genus = ifelse(
+      is.na(Genus)|Genus == "NA"|grepl("uncultured|Ambiguous|metagenome", Genus), 
+      Family, 
+      Genus)) %>%
+  select(-Kingdom, -(Class:Family))
+taxa_tab.intes1 <- taxa_tab.intes %>%
+  mutate(
+    Phylum = gsub("p__", "", Phylum),
+    Phylum = factor(Phylum, levels = rev(unique(Phylum))),
+    Genus = gsub("g__", "", Genus),
+    Genus = factor(Genus, levels = rev(unique(Genus)))) %>%
+  arrange(Phylum, Genus) %>%
+  mutate(Genus = factor(Genus, levels = unique(Genus))) %>%
+  pivot_longer(-c(Phylum, Genus), names_to = "SampleID", values_to = "Abundance") %>%
+  inner_join(rownames_to_column(mtd.intes, "SampleID"), by = "SampleID")
+openxlsx::write.xlsx(taxa_tab.intes1, file = "tables/taxatable at level of intestine for intestine.xlsx")
+
+# feed
+taxa_tab.feed <- as.data.frame(taxa_tab.feed) %>%
+  rownames_to_column("Taxa.feed") %>%
+  separate(
+    Taxa.feed, 
+    sep = ";", 
+    c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")) %>% 
+  mutate(
+    Phylum = ifelse(
+      is.na(Phylum)|Phylum == "NA"|grepl("uncultured|Ambiguous|metagenome", Phylum), 
+      Kingdom, 
+      Phylum),
+    Class = ifelse(
+      is.na(Class)|Class == "NA"|grepl("uncultured|Ambiguous|metagenome", Class), 
+      Phylum, 
+      Class),
+    Order = ifelse(
+      is.na(Order)|Order == "NA"|grepl("uncultured|Ambiguous|metagenome", Order), 
+      Class, 
+      Order),
+    Family = ifelse(
+      is.na(Family)|Family == "NA"|grepl("uncultured|Ambiguous|metagenome", Family), 
+      Order, 
+      Family),
+    Genus = ifelse(
+      is.na(Genus)|Genus == "NA"|grepl("uncultured|Ambiguous|metagenome", Genus), 
+      Family, 
+      Genus)) %>%
+  select(-Kingdom, -(Class:Family))
+taxa_tab.feed1 <- taxa_tab.feed %>%
+  mutate(
+    Phylum = gsub("p__", "", Phylum),
+    Phylum = factor(Phylum, levels = rev(unique(Phylum))),
+    Genus = gsub("g__", "", Genus),
+    Genus = factor(Genus, levels = rev(unique(Genus)))) %>%
+  arrange(Phylum, Genus) %>%
+  mutate(Genus = factor(Genus, levels = unique(Genus))) %>%
+  pivot_longer(-c(Phylum, Genus), names_to = "SampleID", values_to = "Abundance") %>%
+  inner_join(rownames_to_column(mtd.feed, "SampleID"), by = "SampleID")
+openxlsx::write.xlsx(taxa_tab.feed1, file = "tables/taxatable at level of feed for feed.xlsx")
+
+# water
+taxa_tab.water <- as.data.frame(taxa_tab.water) %>%
+  rownames_to_column("Taxa.water") %>%
+  separate(
+    Taxa.water, 
+    sep = ";", 
+    c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")) %>% 
+  mutate(
+    Phylum = ifelse(
+      is.na(Phylum)|Phylum == "NA"|grepl("uncultured|Ambiguous|metagenome", Phylum), 
+      Kingdom, 
+      Phylum),
+    Class = ifelse(
+      is.na(Class)|Class == "NA"|grepl("uncultured|Ambiguous|metagenome", Class), 
+      Phylum, 
+      Class),
+    Order = ifelse(
+      is.na(Order)|Order == "NA"|grepl("uncultured|Ambiguous|metagenome", Order), 
+      Class, 
+      Order),
+    Family = ifelse(
+      is.na(Family)|Family == "NA"|grepl("uncultured|Ambiguous|metagenome", Family), 
+      Order, 
+      Family),
+    Genus = ifelse(
+      is.na(Genus)|Genus == "NA"|grepl("uncultured|Ambiguous|metagenome", Genus), 
+      Family, 
+      Genus)) %>%
+  select(-Kingdom, -(Class:Family))
+taxa_tab.water1 <- taxa_tab.water %>%
+  mutate(
+    Phylum = gsub("p__", "", Phylum),
+    Phylum = factor(Phylum, levels = rev(unique(Phylum))),
+    Genus = gsub("g__", "", Genus),
+    Genus = factor(Genus, levels = rev(unique(Genus)))) %>%
+  arrange(Phylum, Genus) %>%
+  mutate(Genus = factor(Genus, levels = unique(Genus))) %>%
+  pivot_longer(-c(Phylum, Genus), names_to = "SampleID", values_to = "Abundance") %>%
+  inner_join(rownames_to_column(mtd.water, "SampleID"), by = "SampleID")
+openxlsx::write.xlsx(taxa_tab.water1, file = "tables/taxatable at level of water for water.xlsx")
+```
+
+### Boxplot to abundance of individual dominant taxa in the intestine samples grouped by Regime
+
+```{r, fig.width=10}
+# define color scheme
+# col <- c("grey", brewer.pal(n = 12, name = "Paired"))
+mtd$Regime <- factor(mtd$Regime, levels =  c("M", "V", "MM", "VM", "MMV", "VMV"))
+taxa_tab1$Genus2 <- factor(taxa_tab1$Genus, levels = c("Ruminococcaceae", "Bifidobacteriaceae", "Pseudomonas", "Photobacterium", "Pediococcus", "Lactobacillus", "Lactococcus","Leuconostoc", "Sphaerotilus", "Enterococcus", "Flavobacterium", "Yersinia", "Aeromonas", "Polaromonas","Pseudorhodobacter", "Others"))
+# intestine samples
+taxa_boxplot_intestine <- filter(taxa_tab1, sample == "intestine") %>%
+  ggplot(aes(x = factor(Regime, c("M", "V", "MM", "VM", "MMV", "VMV")), y = Abundance, color = Phase)) +
+  geom_boxplot(alpha = 0.5, width = 0.5) +
+  labs(x = "Regime", y = "Relative abundance (%)") +
+  ##scale_y_continuous(breaks = 0:10*10, expand = c(0,0)) + 
+  #scale_fill_manual(values = col) +
+  facet_wrap(
+    ~ Genus2,nrow = 4,
+    scale = "free"
+    
+    ) +
+  theme_bw() +
+  theme(##axis.text.x = element_blank(),
+        ##strip.background = element_blank(),
+        legend.position = "bottom") 
+# Export the plot
+ggsave("figures/top15_intes.tiff", width = 10, height = 6,
+       units = "in", dpi = 300, compression = "lzw")
+```
+
+```{r}
+# intes
+unique(taxa_tab.intes1$Genus)
+# define color scheme
+# col <- c("grey", brewer.pal(n = 12, name = "Paired"))
+mtd.intes$Regime <- factor(mtd.intes$Regime, levels =  c("M", "V", "MM", "VM", "MMV", "VMV"))
+taxa_tab.intes1$Genus2 <- factor(taxa_tab.intes1$Genus, levels = c("Ruminococcaceae", "Bifidobacteriaceae", "Pseudomonas", "Photobacterium", "Pediococcus", "Lactobacillus", "Lactococcus","Leuconostoc", "Acinetobacter", "Enterococcus", "Escherichia-Shigella", "Staphylococcus", "Cutibacterium", "Yersinia","Aeromonas", "OTHERS"))
+# intestine samples
+taxa_boxplot_intestine.intes <- filter(taxa_tab.intes1, sample == "intestine") %>%
+  ggplot(aes(x = factor(Regime, c("M", "V", "MM", "VM", "MMV", "VMV")), y = Abundance, color = Phase)) +
+  geom_boxplot(alpha = 0.5, width = 0.5) +
+  labs(x = "Regime", y = "Relative abundance (%)") +
+  ##scale_y_continuous(breaks = 0:10*10, expand = c(0,0)) + 
+  #scale_fill_manual(values = col) +
+  facet_wrap(
+    ~ Genus2,nrow = 4,
+    scale = "free"
+    
+  ) +
+  theme_bw() +
+  theme(##axis.text.x = element_blank(),
+    ##strip.background = element_blank(),
+    legend.position = "bottom") 
+# Export the plot
+ggsave("figures/top15.intes_intes.tiff", width = 10, height = 6,
+       units = "in", dpi = 300, compression = "lzw")
+```
+
+```{r}
+# intes colored manually!
+unique(taxa_tab.intes1$Genus)
+# define color scheme
+col <- c("#F8766D", "#00BFC4", "#F8766D", "#00BFC4", "#F8766D", "#00BFC4")
+names(col) <- c("M", "V", "MM", "VM", "MMV", "VMV")
+
+mtd.intes$Regime <- factor(mtd.intes$Regime, levels =  c("M", "V", "MM", "VM", "MMV", "VMV"))
+taxa_tab.intes1$Genus2 <- factor(taxa_tab.intes1$Genus, levels = c("Ruminococcaceae", "Bifidobacteriaceae", "Pseudomonas", "Photobacterium", "Pediococcus", "Lactobacillus", "Lactococcus","Leuconostoc", "Acinetobacter", "Enterococcus", "Escherichia-Shigella", "Staphylococcus", "Cutibacterium", "Yersinia","Aeromonas", "OTHERS"))
+# intestine samples
+taxa_boxplot_intestine.intes <- filter(taxa_tab.intes1, sample == "intestine") %>%
+  ggplot(aes(x = factor(Regime, c("M", "V", "MM", "VM", "MMV", "VMV")), y = Abundance, color = Regime)) +
+  geom_boxplot(alpha = 0.5, width = 0.5) +
+  scale_color_manual(values = col) +
+  labs(x = "Regime", y = "Relative abundance (%)") +
+  ##scale_y_continuous(breaks = 0:10*10, expand = c(0,0)) + 
+  facet_wrap(
+    ~ Genus2,nrow = 4,
+    scale = "free"
+    
+  ) +
+  theme_bw() +
+  theme(##axis.text.x = element_blank(),
+    ##strip.background = element_blank(),
+    legend.position = "bottom") 
+# Export the plot
+ggsave("figures/top15.intes_intes1.tiff", width = 10, height = 6,
+       units = "in", dpi = 300, compression = "lzw")
+```
+
+## Boxplot to abundance of individual dominant taxa in the feed samples grouped by Regime
+```{r, fig.width=10}
+# feed
+unique(taxa_tab1$Genus)
+# define color scheme
+# col <- c("grey", brewer.pal(n = 12, name = "Paired"))
+mtd$Regime <- factor(mtd$Regime, levels =  c("M", "V"))
+taxa_tab1$Genus2 <- factor(taxa_tab1$Genus, levels = c("Ruminococcaceae", "Bifidobacteriaceae", "Pseudomonas", "Photobacterium", "Pediococcus", "Lactobacillus", "Lactococcus","Leuconostoc", "Sphaerotilus", "Enterococcus", "Flavobacterium", "Yersinia", "Aeromonas", "Polaromonas","Pseudorhodobacter", "Others"))
+# intestine samples
+taxa_boxplot_feed <- filter(taxa_tab1, sample == "feed") %>%
+  ggplot(aes(x = factor(Regime, c("M", "V")), y = Abundance)) +
+  geom_boxplot(alpha = 0.5, width = 0.5) +
+  labs(x = "Regime", y = "Relative abundance (%)") +
+  ##scale_y_continuous(breaks = 0:10*10, expand = c(0,0)) + 
+  #scale_fill_manual(values = col) +
+  facet_wrap(
+    ~ Genus2,nrow = 4,
+    scale = "free"
+    
+  ) +
+  theme_bw() +
+  theme(##axis.text.x = element_blank(),
+    ##strip.background = element_blank(),
+    legend.position = "bottom") 
+# Export the plot
+ggsave("figures/top15_feed.tiff", width = 10, height = 6,
+       units = "in", dpi = 300, compression = "lzw")
+```
+
+```{r}
+# feed at level of feed 
+unique(taxa_tab.feed1$Genus)
+# define color scheme
+# col <- c("grey", brewer.pal(n = 12, name = "Paired"))
+mtd.feed$Regime <- factor(mtd.feed$Regime, levels =  c("M", "V"))
+taxa_tab.feed1$Genus2 <- reorder(taxa_tab.feed1$Genus, taxa_tab.feed1$Abundance)
+# feed samples
+taxa_boxplot_feed <- filter(taxa_tab.feed1, sample == "feed") %>%
+  ggplot(aes(x = factor(Regime, c("M", "V")), y = Abundance)) +
+  geom_boxplot(alpha = 0.5, width = 0.5) +
+  labs(x = "Regime", y = "Relative abundance (%)") +
+  ##scale_y_continuous(breaks = 0:10*10, expand = c(0,0)) + 
+  #scale_fill_manual(values = col) +
+  facet_wrap(
+    ~ Genus2,nrow = 4,
+    scale = "free"
+    
+  ) +
+  theme_bw() +
+  theme(##axis.text.x = element_blank(),
+    ##strip.background = element_blank(),
+    legend.position = "none") 
+# Export the plot
+ggsave("figures/top15.feed_feed.tiff", width = 10, height = 6,
+       units = "in", dpi = 300, compression = "lzw")
+```
+
+
+## Boxplot to abundance of individual dominant taxa in the water samples grouped by Regime
+```{r, fig.width=10}
+# water
+# define color scheme
+# col <- c("grey", brewer.pal(n = 12, name = "Paired"))
+mtd$Regime <- factor(mtd$Regime, levels =  c("M", "V", "MM", "VM", "MMV", "VMV"))
+taxa_tab1$Genus2 <- factor(taxa_tab1$Genus, levels = c("Ruminococcaceae", "Bifidobacteriaceae", "Pseudomonas", "Photobacterium", "Pediococcus", "Lactobacillus", "Lactococcus","Leuconostoc", "Sphaerotilus", "Enterococcus", "Flavobacterium", "Yersinia", "Aeromonas", "Polaromonas","Pseudorhodobacter", "Others"))
+# intestine samples
+taxa_boxplot_intestine <- filter(taxa_tab1, sample == "water") %>%
+  ggplot(aes(x = factor(Regime, c("M", "V", "MM", "VM", "MMV", "VMV")), y = Abundance, color = Phase)) +
+  geom_boxplot(alpha = 0.5, width = 0.5) +
+  labs(x = "Regime", y = "Relative abundance (%)") +
+  ##scale_y_continuous(breaks = 0:10*10, expand = c(0,0)) + 
+  #scale_fill_manual(values = col) +
+  facet_wrap(
+    ~ Genus2,nrow = 4,
+    scale = "free"
+    
+  ) +
+  theme_bw() +
+  theme(##axis.text.x = element_blank(),
+    ##strip.background = element_blank(),
+    legend.position = "bottom") 
+# Export the plot
+ggsave("figures/top15_wtr.tiff", width = 10, height = 6,
+       units = "in", dpi = 300, compression = "lzw")
+```
+
+
+
+
+```{r}
+# water at level of water
+unique(taxa_tab.water1$Genus)
+# define color scheme
+# col <- c("grey", brewer.pal(n = 12, name = "Paired"))
+mtd.water$Regime <- factor(mtd.water$Regime, levels =  c("M", "V", "MM", "VM", "MMV", "VMV"))
+taxa_tab.water1$Genus2 <- reorder(taxa_tab.water1$Genus, taxa_tab.water1$Abundance)
+# watertine samples
+taxa_boxplot_watertine.water <- filter(taxa_tab.water1, sample == "water") %>%
+  ggplot(aes(x = factor(Regime, c("M", "V", "MM", "VM", "MMV", "VMV")), y = Abundance, color = Phase)) +
+  geom_boxplot(alpha = 0.5, width = 0.5) +
+  labs(x = "Regime", y = "Relative abundance (%)") +
+  ##scale_y_continuous(breaks = 0:10*10, expand = c(0,0)) + 
+  #scale_fill_manual(values = col) +
+  facet_wrap(
+    ~ Genus2,nrow = 4,
+    scale = "free"
+    
+  ) +
+  theme_bw() +
+  theme(##axis.text.x = element_blank(),
+    ##strip.background = element_blank(),
+    legend.position = "bottom") 
+# Export the plot
+ggsave("figures/top15.water_wtr.tiff", width = 10, height = 6,
+       units = "in", dpi = 300, compression = "lzw")
+```
+
+
+##Flitering the dataframe into each individual taxonomic
+
+```{r}
+# intestine 
+##Filter only the dataframe for only intestine 
+intes.taxa_tab2 <- filter(taxa_tab1, sample == "intestine")
+
+##Filter taxa_tab2 dataframe for only Ruminococcaceae
+intes.taxa_r <- intes.taxa_tab2 %>%
+  filter(intes.taxa_tab2$Genus == "Ruminococcaceae")
+##Filter taxa_tab2 dataframe for only the Bifidobacteriaceae
+intes.taxa_b <- intes.taxa_tab2 %>%
+  filter(intes.taxa_tab2$Genus == "Bifidobacteriaceae")
+##Filter taxa_tab2 dataframe for only the Pseudomonas
+intes.taxa_p <- intes.taxa_tab2 %>%
+  filter(intes.taxa_tab2$Genus == "Pseudomonas")
+##Filter taxa_tab2 dataframe for only the Photobacterium
+intes.taxa_ph <- intes.taxa_tab2 %>%
+  filter(intes.taxa_tab2$Genus == "Photobacterium")
+##Filter taxa_tab2 dataframe for only the Pediococcus
+intes.taxa_ped <- intes.taxa_tab2 %>%
+  filter(intes.taxa_tab2$Genus == "Pediococcus")
+##Filter taxa_tab2 dataframe for only the Lactobacillus
+intes.taxa_l <- intes.taxa_tab2 %>%
+  filter(intes.taxa_tab2$Genus == "Lactobacillus")
+##Filter taxa_tab2 dataframe for only the Lactococcus
+intes.taxa_la <- intes.taxa_tab2 %>%
+  filter(intes.taxa_tab2$Genus == "Lactococcus")
+##Filter taxa_tab2 dataframe for only the Leuconostoc
+intes.taxa_le <- intes.taxa_tab2 %>%
+  filter(intes.taxa_tab2$Genus == "Leuconostoc")
+##Filter taxa_tab2 dataframe for only Sphaerotilus
+intes.taxa_s <- intes.taxa_tab2 %>%
+  filter(intes.taxa_tab2$Genus == "Sphaerotilus")
+##Filter taxa_tab2 dataframe for only Enterococcus
+intes.taxa_e <- intes.taxa_tab2 %>%
+  filter(intes.taxa_tab2$Genus == "Enterococcus")
+##Filter taxa_tab2 dataframe for only Flavobacterium
+intes.taxa_f <- intes.taxa_tab2 %>%
+  filter(intes.taxa_tab2$Genus == "Flavobacterium")
+##Filter taxa_tab2 dataframe for only the Yersinia
+intes.taxa_y <- intes.taxa_tab2 %>%
+  filter(intes.taxa_tab2$Genus == "Yersinia")
+##Filter taxa_tab2 dataframe for only the Aeromonas
+intes.taxa_a <- intes.taxa_tab2 %>%
+  filter(intes.taxa_tab2$Genus == "Aeromonas")
+##Filter taxa_tab2 dataframe for only the Polaromonas
+intes.taxa_po <- intes.taxa_tab2 %>%
+  filter(intes.taxa_tab2$Genus == "Polaromonas")
+##Filter taxa_tab2 dataframe for only the Pseudorhodobacter
+intes.taxa_ps <- intes.taxa_tab2 %>%
+  filter(intes.taxa_tab2$Genus == "Pseudorhodobacter")
+##Filter taxa_tab2 dataframe for only Others
+intes.taxa_o <- intes.taxa_tab2 %>%
+  filter(intes.taxa_tab2$Genus == "Others")
+```
+
+```{r}
+# intes at intestine level 
+##Filter only the dataframe for only intestine 
+intes.taxa_tab.intes2 <- filter(taxa_tab.intes1, sample == "intestine")
+##Filter taxa_tab.intes2 dataframe for only Ruminococcaceae
+intes.taxa.intes_r <- intes.taxa_tab.intes2 %>%
+  filter(intes.taxa_tab.intes2$Genus == "Ruminococcaceae")
+##Filter taxa_tab.intes2 dataframe for only the Bifidobacteriaceae
+intes.taxa.intes_b <- intes.taxa_tab.intes2 %>%
+  filter(intes.taxa_tab.intes2$Genus == "Bifidobacteriaceae")
+##Filter taxa_tab.intes2 dataframe for only the Pseudomonas
+intes.taxa.intes_p <- intes.taxa_tab.intes2 %>%
+  filter(intes.taxa_tab.intes2$Genus == "Pseudomonas")
+##Filter taxa_tab.intes2 dataframe for only the Photobacterium
+intes.taxa.intes_ph <- intes.taxa_tab.intes2 %>%
+  filter(intes.taxa_tab.intes2$Genus == "Photobacterium")
+##Filter taxa_tab.intes2 dataframe for only the Pediococcus
+intes.taxa.intes_ped <- intes.taxa_tab.intes2 %>%
+  filter(intes.taxa_tab.intes2$Genus == "Pediococcus")
+##Filter taxa_tab.intes2 dataframe for only the Lactobacillus
+intes.taxa.intes_l <- intes.taxa_tab.intes2 %>%
+  filter(intes.taxa_tab.intes2$Genus == "Lactobacillus")
+##Filter taxa_tab.intes2 dataframe for only the Lactococcus
+intes.taxa.intes_la <- intes.taxa_tab.intes2 %>%
+  filter(intes.taxa_tab.intes2$Genus == "Lactococcus")
+##Filter taxa_tab.intes2 dataframe for only the Leuconostoc
+intes.taxa.intes_le <- intes.taxa_tab.intes2 %>%
+  filter(intes.taxa_tab.intes2$Genus == "Leuconostoc")
+##Filter taxa_tab.intes2 dataframe for only the Acinetobacter
+intes.taxa.intes_ac <- intes.taxa_tab.intes2 %>%
+  filter(intes.taxa_tab.intes2$Genus == "Acinetobacter")
+##Filter taxa_tab.intes2 dataframe for only Enterococcus
+intes.taxa.intes_e <- intes.taxa_tab.intes2 %>%
+  filter(intes.taxa_tab.intes2$Genus == "Enterococcus")
+##Filter taxa_tab.intes2 dataframe for only Escherichia-Shigella
+intes.taxa.intes_es <- intes.taxa_tab.intes2 %>%
+  filter(intes.taxa_tab.intes2$Genus == "Escherichia-Shigella")
+##Filter taxa_tab.intes2 dataframe for only the Staphylococcus
+intes.taxa.intes_st <- intes.taxa_tab.intes2 %>%
+  filter(intes.taxa_tab.intes2$Genus == "Staphylococcus")
+##Filter taxa_tab.intes2 dataframe for only Cutibacterium
+intes.taxa.intes_cut <- intes.taxa_tab.intes2 %>%
+  filter(intes.taxa_tab.intes2$Genus == "Cutibacterium")
+##Filter taxa_tab.intes2 dataframe for only the Yersinia
+intes.taxa.intes_y <- intes.taxa_tab.intes2 %>%
+  filter(intes.taxa_tab.intes2$Genus == "Yersinia")
+##Filter taxa_tab.intes2 dataframe for only the Aeromonas
+intes.taxa.intes_a <- intes.taxa_tab.intes2 %>%
+  filter(intes.taxa_tab.intes2$Genus == "Aeromonas")
+##Filter taxa_tab.intes2 dataframe for only OTHERS
+intes.taxa.intes_o <- intes.taxa_tab.intes2 %>%
+  filter(intes.taxa_tab.intes2$Genus == "OTHERS")
+```
+
+```{r}
+# water 
+##Filter only the dataframe for only water 
+water.taxa_tab2 <- filter(taxa_tab1, sample == "water")
+
+##Filter taxa_tab2 dataframe for only Ruminococcaceae
+water.taxa_r <- water.taxa_tab2 %>%
+  filter(water.taxa_tab2$Genus == "Ruminococcaceae")
+##Filter taxa_tab2 dataframe for only the Bifidobacteriaceae
+water.taxa_b <- water.taxa_tab2 %>%
+  filter(water.taxa_tab2$Genus == "Bifidobacteriaceae")
+##Filter taxa_tab2 dataframe for only the Pseudomonas
+water.taxa_p <- water.taxa_tab2 %>%
+  filter(water.taxa_tab2$Genus == "Pseudomonas")
+##Filter taxa_tab2 dataframe for only the Photobacterium
+water.taxa_ph <- water.taxa_tab2 %>%
+  filter(water.taxa_tab2$Genus == "Photobacterium")
+##Filter taxa_tab2 dataframe for only the Pediococcus
+water.taxa_ped <- water.taxa_tab2 %>%
+  filter(water.taxa_tab2$Genus == "Pediococcus")
+##Filter taxa_tab2 dataframe for only the Lactobacillus
+water.taxa_l <- water.taxa_tab2 %>%
+  filter(water.taxa_tab2$Genus == "Lactobacillus")
+##Filter taxa_tab2 dataframe for only the Lactococcus
+water.taxa_la <- water.taxa_tab2 %>%
+  filter(water.taxa_tab2$Genus == "Lactococcus")
+##Filter taxa_tab2 dataframe for only the Leuconostoc
+water.taxa_le <- water.taxa_tab2 %>%
+  filter(water.taxa_tab2$Genus == "Leuconostoc")
+##Filter taxa_tab2 dataframe for only Sphaerotilus
+water.taxa_s <- water.taxa_tab2 %>%
+  filter(water.taxa_tab2$Genus == "Sphaerotilus")
+##Filter taxa_tab2 dataframe for only Enterococcus
+water.taxa_e <- water.taxa_tab2 %>%
+  filter(water.taxa_tab2$Genus == "Enterococcus")
+##Filter taxa_tab2 dataframe for only Flavobacterium
+water.taxa_f <- water.taxa_tab2 %>%
+  filter(water.taxa_tab2$Genus == "Flavobacterium")
+##Filter taxa_tab2 dataframe for only the Yersinia
+water.taxa_y <- water.taxa_tab2 %>%
+  filter(water.taxa_tab2$Genus == "Yersinia")
+##Filter taxa_tab2 dataframe for only the Aeromonas
+water.taxa_a <- water.taxa_tab2 %>%
+  filter(water.taxa_tab2$Genus == "Aeromonas")
+##Filter taxa_tab2 dataframe for only the Polaromonas
+water.taxa_po <- water.taxa_tab2 %>%
+  filter(water.taxa_tab2$Genus == "Polaromonas")
+##Filter taxa_tab2 dataframe for only the Pseudorhodobacter
+water.taxa_ps <- water.taxa_tab2 %>%
+  filter(water.taxa_tab2$Genus == "Pseudorhodobacter")
+##Filter taxa_tab2 dataframe for only Others
+water.taxa_o <- water.taxa_tab2 %>%
+  filter(water.taxa_tab2$Genus == "Others")
+```
+
+```{r}
+# water at level of water 
+
+# unique(taxa_tab.water2)$Genus
+# [1] OTHERs            Microtrichaceae   Luteolibacter     Arsenicibacter   
+# [5] Sediminibacterium Saprospiraceae    Flavobacterium    Rubrivivax       
+# [9] Rhodoferax        Leptothrix        AAP99             Novosphingobium  
+# [13] Rhodobacter       Sphaerotilus      Polaromonas       Pseudorhodobacter
+# 16 Levels: OTHERs Microtrichaceae Luteolibacter Arsenicibacter ... Pseudorhodobacter
+
+##Filter only the dataframe for only water 
+water.taxa_tab.water2 <- filter(taxa_tab.water1, sample == "water")
+
+##Filter taxa_tab.water2 dataframe for only AAP99 
+water.taxa.water_aa <- water.taxa_tab.water2 %>%
+  filter(water.taxa_tab.water2$Genus == "AAP99")
+##Filter taxa_tab.water2 dataframe for only the Arsenicibacter
+water.taxa.water_ar <- water.taxa_tab.water2 %>%
+  filter(water.taxa_tab.water2$Genus == "Arsenicibacter")
+##Filter taxa_tab.water2 dataframe for only Flavobacterium
+water.taxa.water_f <- water.taxa_tab.water2 %>%
+  filter(water.taxa_tab.water2$Genus == "Flavobacterium")
+##Filter taxa_tab.water2 dataframe for only the Leptothrix 
+water.taxa.water_le <- water.taxa_tab.water2 %>%
+  filter(water.taxa_tab.water2$Genus == "Leptothrix")
+##Filter taxa_tab.water2 dataframe for only the Luteolibacter
+water.taxa.water_lu <- water.taxa_tab.water2 %>%
+  filter(water.taxa_tab.water2$Genus == "Luteolibacter")
+##Filter taxa_tab.water2 dataframe for only the Microtrichaceae
+water.taxa.water_m <- water.taxa_tab.water2 %>%
+  filter(water.taxa_tab.water2$Genus == "Microtrichaceae")
+##Filter taxa_tab.water2 dataframe for only the Novosphingobium 
+water.taxa.water_n <- water.taxa_tab.water2 %>%
+  filter(water.taxa_tab.water2$Genus == "Novosphingobium")
+##Filter taxa_tab.water2 dataframe for only the Polaromonas
+water.taxa.water_po <- water.taxa_tab.water2 %>%
+  filter(water.taxa_tab.water2$Genus == "Polaromonas")
+##Filter taxa_tab.water2 dataframe for only the Pseudorhodobacter
+water.taxa.water_ps <- water.taxa_tab.water2 %>%
+  filter(water.taxa_tab.water2$Genus == "Pseudorhodobacter")
+##Filter taxa_tab.water2 dataframe for only the Rhodobacter 
+water.taxa.water_rb <- water.taxa_tab.water2 %>%
+  filter(water.taxa_tab.water2$Genus == "Rhodobacter")
+##Filter taxa_tab.water2 dataframe for only the Rhodoferax 
+water.taxa.water_rf <- water.taxa_tab.water2 %>%
+  filter(water.taxa_tab.water2$Genus == "Rhodoferax")
+##Filter taxa_tab.water2 dataframe for only Rubrivivax 
+water.taxa.water_rx <- water.taxa_tab.water2 %>%
+  filter(water.taxa_tab.water2$Genus == "Rubrivivax")
+##Filter taxa_tab.water2 dataframe for only the Saprospiraceae
+water.taxa.water_sa <- water.taxa_tab.water2 %>%
+  filter(water.taxa_tab.water2$Genus == "Saprospiraceae")
+##Filter taxa_tab.water2 dataframe for only the Sediminibacterium
+water.taxa.water_sed <- water.taxa_tab.water2 %>%
+  filter(water.taxa_tab.water2$Genus == "Sediminibacterium")
+##Filter taxa_tab.water2 dataframe for only Sphaerotilus
+water.taxa.water_s <- water.taxa_tab.water2 %>%
+  filter(water.taxa_tab.water2$Genus == "Sphaerotilus")
+##Filter taxa_tab.water2 dataframe for only OTHERs
+water.taxa.water_o <- water.taxa_tab.water2 %>%
+  filter(water.taxa_tab.water2$Genus == "OTHERs")
+```
+
+```{r}
+# feed
+##Filter only the dataframe for only feed 
+feed.taxa_tab2 <- filter(taxa_tab1, sample == "feed")
+
+##Filter taxa_tab2 dataframe for only Ruminococcaceae
+feed.taxa_r <- feed.taxa_tab2 %>%
+  filter(feed.taxa_tab2$Genus == "Ruminococcaceae")
+##Filter taxa_tab2 dataframe for only the Bifidobacteriaceae
+feed.taxa_b <- feed.taxa_tab2 %>%
+  filter(feed.taxa_tab2$Genus == "Bifidobacteriaceae")
+##Filter taxa_tab2 dataframe for only the Pseudomonas
+feed.taxa_p <- feed.taxa_tab2 %>%
+  filter(feed.taxa_tab2$Genus == "Pseudomonas")
+##Filter taxa_tab2 dataframe for only the Photobacterium
+feed.taxa_ph <- feed.taxa_tab2 %>%
+  filter(feed.taxa_tab2$Genus == "Photobacterium")
+##Filter taxa_tab2 dataframe for only the Pediococcus
+feed.taxa_ped <- feed.taxa_tab2 %>%
+  filter(feed.taxa_tab2$Genus == "Pediococcus")
+##Filter taxa_tab2 dataframe for only the Lactobacillus
+feed.taxa_l <- feed.taxa_tab2 %>%
+  filter(feed.taxa_tab2$Genus == "Lactobacillus")
+##Filter taxa_tab2 dataframe for only the Lactococcus
+feed.taxa_la <- feed.taxa_tab2 %>%
+  filter(feed.taxa_tab2$Genus == "Lactococcus")
+##Filter taxa_tab2 dataframe for only the Leuconostoc
+feed.taxa_le <- feed.taxa_tab2 %>%
+  filter(feed.taxa_tab2$Genus == "Leuconostoc")
+##Filter taxa_tab2 dataframe for only Sphaerotilus
+feed.taxa_s <- feed.taxa_tab2 %>%
+  filter(feed.taxa_tab2$Genus == "Sphaerotilus")
+##Filter taxa_tab2 dataframe for only Enterococcus
+feed.taxa_e <- feed.taxa_tab2 %>%
+  filter(feed.taxa_tab2$Genus == "Enterococcus")
+##Filter taxa_tab2 dataframe for only Flavobacterium
+feed.taxa_f <- feed.taxa_tab2 %>%
+  filter(feed.taxa_tab2$Genus == "Flavobacterium")
+##Filter taxa_tab2 dataframe for only the Yersinia
+feed.taxa_y <- feed.taxa_tab2 %>%
+  filter(feed.taxa_tab2$Genus == "Yersinia")
+##Filter taxa_tab2 dataframe for only the Aeromonas
+feed.taxa_a <- feed.taxa_tab2 %>%
+  filter(feed.taxa_tab2$Genus == "Aeromonas")
+##Filter taxa_tab2 dataframe for only the Polaromonas
+feed.taxa_po <- feed.taxa_tab2 %>%
+  filter(feed.taxa_tab2$Genus == "Polaromonas")
+##Filter taxa_tab2 dataframe for only the Pseudorhodobacter
+feed.taxa_ps <- feed.taxa_tab2 %>%
+  filter(feed.taxa_tab2$Genus == "Pseudorhodobacter")
+##Filter taxa_tab2 dataframe for only Others
+feed.taxa_o <- feed.taxa_tab2 %>%
+  filter(feed.taxa_tab2$Genus == "Others")
+```
+
+```{r}
+# feed at level of feed 
+
+# unique(taxa_tab.feed1)$Genus
+# [1] others                      Psychrilyobacter           
+# [3] Fusobacterium               Bifidobacteriaceae         
+# [5] Janthinobacterium           Shewanella                 
+# [7] Photobacterium              Tepidimicrobium            
+# [9] Clostridium sensu stricto 7 Clostridiaceae             
+# [11] Streptococcus               Weissella                  
+# [13] Pediococcus                 Leuconostoc                
+# [15] Lactococcus                 Lactobacillus              
+# 16 Levels: others Psychrilyobacter Fusobacterium ... Lactobacillus
+
+##Filter only the dataframe for only feed 
+feed.taxa_tab.feed2 <- filter(taxa_tab.feed1, sample == "feed")
+
+##Filter taxa_tab.feed2 dataframe for only Bifidobacteriaceae  
+feed.taxa.feed_b <- feed.taxa_tab.feed2 %>%
+  filter(feed.taxa_tab.feed2$Genus == "Bifidobacteriaceae")
+##Filter taxa_tab.feed2 dataframe for only the Clostridium sensu stricto 7 
+feed.taxa.feed_c <- feed.taxa_tab.feed2 %>%
+  filter(feed.taxa_tab.feed2$Genus == "Clostridium sensu stricto 7")
+##Filter taxa_tab.feed2 dataframe for only the Clostridiaceae
+feed.taxa.feed_cc <- feed.taxa_tab.feed2 %>%
+  filter(feed.taxa_tab.feed2$Genus == "Clostridiaceae")
+##Filter taxa_tab.feed2 dataframe for only Fusobacterium 
+feed.taxa.feed_f <- feed.taxa_tab.feed2 %>%
+  filter(feed.taxa_tab.feed2$Genus == "Fusobacterium")
+##Filter taxa_tab.feed2 dataframe for only the Janthinobacterium  
+feed.taxa.feed_j <- feed.taxa_tab.feed2 %>%
+  filter(feed.taxa_tab.feed2$Genus == "Janthinobacterium")
+##Filter taxa_tab.feed2 dataframe for only the Lactobacillus
+feed.taxa.feed_l <- feed.taxa_tab.feed2 %>%
+  filter(feed.taxa_tab.feed2$Genus == "Lactobacillus")
+##Filter taxa_tab.feed2 dataframe for only the Microtrichaceae
+feed.taxa.feed_la <- feed.taxa_tab.feed2 %>%
+  filter(feed.taxa_tab.feed2$Genus == "Lactococcus")
+##Filter taxa_tab.feed2 dataframe for only the Leuconostoc 
+feed.taxa.feed_le <- feed.taxa_tab.feed2 %>%
+  filter(feed.taxa_tab.feed2$Genus == "Leuconostoc")
+##Filter taxa_tab.feed2 dataframe for only the Pediococcus 
+feed.taxa.feed_p <- feed.taxa_tab.feed2 %>%
+  filter(feed.taxa_tab.feed2$Genus == "Pediococcus")
+##Filter taxa_tab.feed2 dataframe for only the Photobacterium 
+feed.taxa.feed_ph <- feed.taxa_tab.feed2 %>%
+  filter(feed.taxa_tab.feed2$Genus == "Photobacterium")
+##Filter taxa_tab.feed2 dataframe for only the Psychrilyobacter 
+feed.taxa.feed_py <- feed.taxa_tab.feed2 %>%
+  filter(feed.taxa_tab.feed2$Genus == "Psychrilyobacter")
+##Filter taxa_tab.feed2 dataframe for only the Shewanella  
+feed.taxa.feed_sh <- feed.taxa_tab.feed2 %>%
+  filter(feed.taxa_tab.feed2$Genus == "Shewanella")
+##Filter taxa_tab.feed2 dataframe for only Streptococcus 
+feed.taxa.feed_st <- feed.taxa_tab.feed2 %>%
+  filter(feed.taxa_tab.feed2$Genus == "Streptococcus")
+##Filter taxa_tab.feed2 dataframe for only the Tepidimicrobium 
+feed.taxa.feed_t <- feed.taxa_tab.feed2 %>%
+  filter(feed.taxa_tab.feed2$Genus == "Tepidimicrobium")
+##Filter taxa_tab.feed2 dataframe for only Weissella
+feed.taxa.feed_w <- feed.taxa_tab.feed2 %>%
+  filter(feed.taxa_tab.feed2$Genus == "Weissella")
+##Filter taxa_tab.feed2 dataframe for only others
+feed.taxa.feed_o <- feed.taxa_tab.feed2 %>%
+  filter(feed.taxa_tab.feed2$Genus == "others")
+```
+
+##Test the Regime effect on individual taxonomy - Kruska-walis test
+
+```{r}
+# intes
+##Statistics for 1. Ruminococcaceae
+kruskal.test(Abundance ~ Regime, data = intes.taxa_r)
+##Statistics for 2. Bifidobacteriaceae
+kruskal.test(Abundance ~ Regime, data = intes.taxa_b)
+##Statistics for 3. Pseudomonas
+kruskal.test(Abundance ~ Regime, data = intes.taxa_p)
+##Statistics for 4. Photobacterium
+kruskal.test(Abundance ~ Regime, data = intes.taxa_ph)
+##Statistics for 5. Pediococcus
+kruskal.test(Abundance ~ Regime, data = intes.taxa_ped)
+##Statistics for 6. Lactobacillus
+kruskal.test(Abundance ~ Regime, data = intes.taxa_l)
+##Statistics for 7. Lactococcus
+kruskal.test(Abundance ~ Regime, data = intes.taxa_la)
+##Statistics for 8. Leuconostoc
+kruskal.test(Abundance ~ Regime, data = intes.taxa_le)
+##Statistics for 9. Sphaerotilus 
+kruskal.test(Abundance ~ Regime, data = intes.taxa_s)
+##Statistics for 10. Enterococcus
+kruskal.test(Abundance ~ Regime, data = intes.taxa_e)
+##Statistics for 11. Flavobacterium
+kruskal.test(Abundance ~ Regime, data = intes.taxa_f)
+##Statistics for 12. Yersinia
+kruskal.test(Abundance ~ Regime, data = intes.taxa_y)
+##Statistics for 13. Aeromonas
+kruskal.test(Abundance ~ Regime, data = intes.taxa_a)
+##Statistics for 14. Polaromonas
+kruskal.test(Abundance ~ Regime, data = intes.taxa_po)
+##Statistics for 15. Pseudorhodobacter
+kruskal.test(Abundance ~ Regime, data = intes.taxa_ps)
+##Statistics for 16. Others
+kruskal.test(Abundance ~ Regime, data = intes.taxa_o)
+# 1.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 42.159, df = 5, p-value = 5.469e-08
+# 
+# 
+# 2.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 77.875, df = 5, p-value = 2.335e-15
+# 
+# 
+# 3.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 37.315, df = 5, p-value = 5.178e-07
+# 
+# 
+# 4.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 58.118, df = 5, p-value = 2.973e-11
+# 
+# 
+# 5.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 61.889, df = 5, p-value = 4.944e-12
+# 
+# 
+# 6.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 43.139, df = 5, p-value = 3.463e-08
+# 
+# 
+# 7.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 57.186, df = 5, p-value = 4.63e-11
+# 
+# 
+# 8.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 45.005, df = 5, p-value = 1.448e-08
+# 
+# 
+# 9.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 14.616, df = 5, p-value = 0.01214
+# 
+# 
+# 10.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.7803, df = 5, p-value = 0.5815
+# 
+# 
+# 11.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 2.1938, df = 5, p-value = 0.8217
+# 
+# 
+# 12.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 29.173, df = 5, p-value = 2.144e-05
+# 
+# 
+# 13.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.1448, df = 5, p-value = 0.6777
+# 
+# 
+# 14.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 11.96, df = 5, p-value = 0.03534
+# 
+# 
+# 15.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 2.6487, df = 5, p-value = 0.7539
+# 
+# 
+# 16.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 36.903, df = 5, p-value = 6.263e-07
+
+```
+
+```{r}
+# intes at level of intes
+##Statistics for 1. Ruminococcaceae
+kruskal.test(Abundance ~ Regime, data = intes.taxa.intes_r)
+##Statistics for 2. Bifidobacteriaceae
+kruskal.test(Abundance ~ Regime, data = intes.taxa.intes_b)
+##Statistics for 3. Pseudomonas
+kruskal.test(Abundance ~ Regime, data = intes.taxa.intes_p)
+##Statistics for 4. Photobacterium
+kruskal.test(Abundance ~ Regime, data = intes.taxa.intes_ph)
+##Statistics for 5. Pediococcus
+kruskal.test(Abundance ~ Regime, data = intes.taxa.intes_ped)
+##Statistics for 6. Lactobacillus
+kruskal.test(Abundance ~ Regime, data = intes.taxa.intes_l)
+##Statistics for 7. Lactococcus
+kruskal.test(Abundance ~ Regime, data = intes.taxa.intes_la)
+##Statistics for 8. Leuconostoc
+kruskal.test(Abundance ~ Regime, data = intes.taxa.intes_le)
+##Statistics for 9. Acinetobacter 
+kruskal.test(Abundance ~ Regime, data = intes.taxa.intes_ac)
+##Statistics for 10. Enterococcus
+kruskal.test(Abundance ~ Regime, data = intes.taxa.intes_e)
+##Statistics for 11. Escherichia-Shigella
+kruskal.test(Abundance ~ Regime, data = intes.taxa.intes_es)
+##Statistics for 12. Staphylococcus
+kruskal.test(Abundance ~ Regime, data = intes.taxa.intes_st)
+##Statistics for 13. Cutibacterium
+kruskal.test(Abundance ~ Regime, data = intes.taxa.intes_cut)
+##Statistics for 14. Yersinia
+kruskal.test(Abundance ~ Regime, data = intes.taxa.intes_y)
+##Statistics for 15. Aeromonas
+kruskal.test(Abundance ~ Regime, data = intes.taxa.intes_a)
+##Statistics for 16. OTHERS
+kruskal.test(Abundance ~ Regime, data = intes.taxa.intes_o)
+# 1.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 42.159, df = 5, p-value = 5.469e-08
+# 
+# 
+# 2.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 77.875, df = 5, p-value = 2.335e-15
+# 
+# 
+# 3.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 37.315, df = 5, p-value = 5.178e-07
+# 
+# 
+# 4.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 58.118, df = 5, p-value = 2.973e-11
+# 
+# 
+# 5.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 61.889, df = 5, p-value = 4.944e-12
+# 
+# 
+# 6.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 43.139, df = 5, p-value = 3.463e-08
+# 
+# 
+# 7.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 57.186, df = 5, p-value = 4.63e-11
+# 
+# 
+# 8.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 45.005, df = 5, p-value = 1.448e-08
+# 
+# 
+# 9.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 12.965, df = 5, p-value = 0.0237
+# 
+# 
+# 10.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.7803, df = 5, p-value = 0.5815
+# 
+# 
+# 11.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 30.904, df = 5, p-value = 9.784e-06
+# 
+# 
+# 12.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 26.715, df = 5, p-value = 6.48e-05
+# 
+# 
+# 13.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 43.144, df = 5, p-value = 3.455e-08
+# 
+# 
+# 14.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 29.173, df = 5, p-value = 2.144e-05
+# 
+# 
+# 15.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.1448, df = 5, p-value = 0.6777
+# 
+# 
+# 16.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 37.258, df = 5, p-value = 5.317e-07
+
+```
+
+```{r}
+# water
+##Statistics for 1. Ruminococcaceae
+kruskal.test(Abundance ~ Regime, data = water.taxa_r)
+##Statistics for 2. Bifidobacteriaceae
+kruskal.test(Abundance ~ Regime, data = water.taxa_b)
+##Statistics for 3. Pseudomonas
+kruskal.test(Abundance ~ Regime, data = water.taxa_p)
+##Statistics for 4. Photobacterium
+kruskal.test(Abundance ~ Regime, data = water.taxa_ph)
+##Statistics for 5. Pediococcus
+kruskal.test(Abundance ~ Regime, data = water.taxa_ped)
+##Statistics for 6. Lactobacillus
+kruskal.test(Abundance ~ Regime, data = water.taxa_l)
+##Statistics for 7. Lactococcus
+kruskal.test(Abundance ~ Regime, data = water.taxa_la)
+##Statistics for 8. Leuconostoc
+kruskal.test(Abundance ~ Regime, data = water.taxa_le)
+##Statistics for 9. Sphaerotilus 
+kruskal.test(Abundance ~ Regime, data = water.taxa_s)
+##Statistics for 10. Enterococcus
+kruskal.test(Abundance ~ Regime, data = water.taxa_e)
+##Statistics for 11. Flavobacterium
+kruskal.test(Abundance ~ Regime, data = water.taxa_f)
+##Statistics for 12. Yersinia
+kruskal.test(Abundance ~ Regime, data = water.taxa_y)
+##Statistics for 13. Aeromonas
+kruskal.test(Abundance ~ Regime, data = water.taxa_a)
+##Statistics for 14. Polaromonas
+kruskal.test(Abundance ~ Regime, data = water.taxa_po)
+##Statistics for 15. Pseudorhodobacter
+kruskal.test(Abundance ~ Regime, data = water.taxa_ps)
+##Statistics for 16. Others
+kruskal.test(Abundance ~ Regime, data = water.taxa_o)
+# 1.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 5.3041, df = 5, p-value = 0.3799
+# 
+# 
+# 2.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.4756, df = 5, p-value = 0.6271
+# 
+# 
+# 3.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 11.848, df = 5, p-value = 0.03693
+# 
+# 
+# 4.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 5.2826, df = 5, p-value = 0.3824
+# 
+# 
+# 5.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 5.7423, df = 5, p-value = 0.3321
+# 
+# 
+# 6.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 1.9662, df = 5, p-value = 0.8538
+# 
+# 
+# 7.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 2.6862, df = 5, p-value = 0.7482
+# 
+# 
+# 8.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 9.0797, df = 5, p-value = 0.1059
+# 
+# 
+# 9.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 11.877, df = 5, p-value = 0.03651
+# 
+# 
+# 10.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 6.5658, df = 5, p-value = 0.255
+# 
+# 
+# 11.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 13.868, df = 5, p-value = 0.01647
+# 
+# 
+# 12.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 12.417, df = 5, p-value = 0.0295
+# 
+# 
+# 13.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 14.594, df = 5, p-value = 0.01225
+# 
+# 
+# 14.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 2.6725, df = 5, p-value = 0.7503
+# 
+# 
+# 15.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 15.523, df = 5, p-value = 0.008345
+# 
+# 
+# 16.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 15.547, df = 5, p-value = 0.008265
+
+```
+
+```{r}
+# water at level of water 
+##Statistics for 1. AAP99
+kruskal.test(Abundance ~ Regime, data = water.taxa.water_aa)
+##Statistics for 2. Arsenicibacter
+kruskal.test(Abundance ~ Regime, data = water.taxa.water_ar)
+##Statistics for 3. Flavobacterium
+kruskal.test(Abundance ~ Regime, data = water.taxa.water_f)
+##Statistics for 4. Leptothrix
+kruskal.test(Abundance ~ Regime, data = water.taxa.water_le)
+##Statistics for 5. Luteolibacter
+kruskal.test(Abundance ~ Regime, data = water.taxa.water_lu)
+##Statistics for 6. Microtrichaceae
+kruskal.test(Abundance ~ Regime, data = water.taxa.water_m)
+##Statistics for 7. Novosphingobium
+kruskal.test(Abundance ~ Regime, data = water.taxa.water_n)
+##Statistics for 8. Polaromonas
+kruskal.test(Abundance ~ Regime, data = water.taxa.water_po)
+##Statistics for 9. Pseudorhodobacter 
+kruskal.test(Abundance ~ Regime, data = water.taxa.water_ps)
+##Statistics for 10. Rhodobacter
+kruskal.test(Abundance ~ Regime, data = water.taxa.water_rb)
+##Statistics for 11. Rubrivivax
+kruskal.test(Abundance ~ Regime, data = water.taxa.water_rx)
+##Statistics for 12. Rhodoferax
+kruskal.test(Abundance ~ Regime, data = water.taxa.water_rf)
+##Statistics for 13. Saprospiraceae
+kruskal.test(Abundance ~ Regime, data = water.taxa.water_sa)
+##Statistics for 14. Sediminibacterium
+kruskal.test(Abundance ~ Regime, data = water.taxa.water_sed)
+##Statistics for 15. Sphaerotilus
+kruskal.test(Abundance ~ Regime, data = water.taxa.water_s)
+##Statistics for 16. OTHERs
+kruskal.test(Abundance ~ Regime, data = water.taxa.water_o)
+# 1.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 15.538, df = 5, p-value = 0.008295
+# 
+# 
+# 2.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 16.46, df = 5, p-value = 0.005646
+# 
+# 
+# 3.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 13.868, df = 5, p-value = 0.01647
+# 
+# 
+# 4.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 12.515, df = 5, p-value = 0.02838
+# 
+# 
+# 5.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 15.383, df = 5, p-value = 0.008845
+# 
+# 
+# 6.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 15.752, df = 5, p-value = 0.007588
+# 
+# 
+# 7.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 14.684, df = 5, p-value = 0.0118
+# 
+# 
+# 8.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 2.6725, df = 5, p-value = 0.7503
+# 
+# 
+# 9.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 15.523, df = 5, p-value = 0.008345
+# 
+# 
+# 10.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 11.754, df = 5, p-value = 0.03831
+# 
+# 
+# 11.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 11.57, df = 5, p-value = 0.04118
+# 
+# 
+# 12.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 14.152, df = 5, p-value = 0.01467
+# 
+# 
+# 13.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 13.251, df = 5, p-value = 0.02113
+# 
+# 
+# 14.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 15.778, df = 5, p-value = 0.007508
+# 
+# 
+# 15.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 11.877, df = 5, p-value = 0.03651
+# 
+# 
+# 16.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 11.737, df = 5, p-value = 0.03858
+
+```
+
+```{r}
+# feed
+##Statistics for 1. Ruminococcaceae
+kruskal.test(Abundance ~ Regime, data = feed.taxa_r)
+##Statistics for 2. Bifidobacteriaceae
+kruskal.test(Abundance ~ Regime, data = feed.taxa_b)
+##Statistics for 3. Pseudomonas
+kruskal.test(Abundance ~ Regime, data = feed.taxa_p)
+##Statistics for 4. Photobacterium
+kruskal.test(Abundance ~ Regime, data = feed.taxa_ph)
+##Statistics for 5. Pediococcus
+kruskal.test(Abundance ~ Regime, data = feed.taxa_ped)
+##Statistics for 6. Lactobacillus
+kruskal.test(Abundance ~ Regime, data = feed.taxa_l)
+##Statistics for 7. Lactococcus
+kruskal.test(Abundance ~ Regime, data = feed.taxa_la)
+##Statistics for 8. Leuconostoc
+kruskal.test(Abundance ~ Regime, data = feed.taxa_le)
+##Statistics for 9. Sphaerotilus 
+kruskal.test(Abundance ~ Regime, data = feed.taxa_s)
+##Statistics for 10. Enterococcus
+kruskal.test(Abundance ~ Regime, data = feed.taxa_e)
+##Statistics for 11. Flavobacterium
+kruskal.test(Abundance ~ Regime, data = feed.taxa_f)
+##Statistics for 12. Yersinia
+kruskal.test(Abundance ~ Regime, data = feed.taxa_y)
+##Statistics for 13. Aeromonas
+kruskal.test(Abundance ~ Regime, data = feed.taxa_a)
+##Statistics for 14. Polaromonas
+kruskal.test(Abundance ~ Regime, data = feed.taxa_po)
+##Statistics for 15. Pseudorhodobacter
+kruskal.test(Abundance ~ Regime, data = feed.taxa_ps)
+##Statistics for 16. Others
+kruskal.test(Abundance ~ Regime, data = feed.taxa_o)
+# 1.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 0.047619, df = 1, p-value = 0.8273
+# 
+# 
+# 2.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+# 
+# 
+# 3.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 1.1905, df = 1, p-value = 0.2752
+# 
+# 
+# 4.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+# 
+# 
+# 5.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+# 
+# 
+# 6.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+# 
+# 
+# 7.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+# 
+# 
+# 8.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+# 
+# 
+# 9.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 0.78431, df = 1, p-value = 0.3758
+# 
+# 
+# 10.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.9706, df = 1, p-value = 0.0463
+# 
+# 
+# 11.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 1.1905, df = 1, p-value = 0.2752
+# 
+# 
+# 12.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 1, df = 1, p-value = 0.3173
+# 
+# 
+# 13.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.9706, df = 1, p-value = 0.0463
+# 
+# 
+# 14.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = NaN, df = 1, p-value = NA
+# 
+# 
+# 15.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = NaN, df = 1, p-value = NA
+# 
+# 
+# 16.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+
+```
+
+```{r}
+# feed at level of feed 
+##Statistics for 1. Bifidobacteriaceae
+kruskal.test(Abundance ~ Regime, data = feed.taxa.feed_b)
+##Statistics for 2. Clostridium sensu stricto 7
+kruskal.test(Abundance ~ Regime, data = feed.taxa.feed_c)
+##Statistics for 3. Clostridiaceae
+kruskal.test(Abundance ~ Regime, data = feed.taxa.feed_cc)
+##Statistics for 4. Fusobacterium
+kruskal.test(Abundance ~ Regime, data = feed.taxa.feed_f)
+##Statistics for 5. Janthinobacterium
+kruskal.test(Abundance ~ Regime, data = feed.taxa.feed_j)
+##Statistics for 6. Lactobacillus
+kruskal.test(Abundance ~ Regime, data = feed.taxa.feed_l)
+##Statistics for 7. Lactococcus
+kruskal.test(Abundance ~ Regime, data = feed.taxa.feed_la)
+##Statistics for 8. Leuconostoc
+kruskal.test(Abundance ~ Regime, data = feed.taxa.feed_le)
+##Statistics for 9. Pediococcus 
+kruskal.test(Abundance ~ Regime, data = feed.taxa.feed_p)
+##Statistics for 10. Photobacterium
+kruskal.test(Abundance ~ Regime, data = feed.taxa.feed_ph)
+##Statistics for 11. Psychrilyobacter
+kruskal.test(Abundance ~ Regime, data = feed.taxa.feed_py)
+##Statistics for 12. Shewanella
+kruskal.test(Abundance ~ Regime, data = feed.taxa.feed_sh)
+##Statistics for 13. Streptococcus
+kruskal.test(Abundance ~ Regime, data = feed.taxa.feed_st)
+##Statistics for 14. Tepidimicrobium            
+kruskal.test(Abundance ~ Regime, data = feed.taxa.feed_t)
+##Statistics for 15. Weissella
+kruskal.test(Abundance ~ Regime, data = feed.taxa.feed_w)
+##Statistics for 16. others
+kruskal.test(Abundance ~ Regime, data = feed.taxa.feed_o)
+# 1.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+# 
+# 
+# 2.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+# 
+# 
+# 3.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+# 
+# 
+# 4.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+# 
+# 
+# 5.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 0.047619, df = 1, p-value = 0.8273
+# 
+# 
+# 6.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+# 
+# 
+# 7.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+# 
+# 
+# 8.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+# 
+# 
+# 9.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+# 
+# 
+# 10.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+# 
+# 
+# 11.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+# 
+# 
+# 12.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+# 
+# 
+# 13.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+# 
+# 
+# 14.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+# 
+# 
+# 15.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 2.3333, df = 1, p-value = 0.1266
+# 
+# 
+# 16.	Kruskal-Wallis rank sum test
+# 
+# data:  Abundance by Regime
+# Kruskal-Wallis chi-squared = 3.8571, df = 1, p-value = 0.04953
+
+```
+
+##Pair-wise comparison
+##The P-values for all the individual taxonomy, excpet Alliivibrio were less than 0.0001. Thus, we proceed to use wilcox pairwise comparison to identify differences between Regime.
+
+```{r}
+# intes
+##Statistics for 1.	Aeromonas 
+intes.wilcox <- compare_means(Abundance ~ Regime, intes.taxa_a, method = "wilcox.test")
+##Statistics for 2.	Bifidobacteriaceae 
+intes.wilcox1 <- compare_means(Abundance ~ Regime, intes.taxa_b, method = "wilcox.test")
+##Statistics for 3.	Enterococcus 
+intes.wilcox2 <- compare_means(Abundance ~ Regime, intes.taxa_e, method = "wilcox.test")
+##Statistics for 4.	Flavobacterium 
+intes.wilcox3 <- compare_means(Abundance ~ Regime, intes.taxa_f, method = "wilcox.test")
+##Statistics for 5.	Lactobacillus 
+intes.wilcox4 <- compare_means(Abundance ~ Regime, intes.taxa_l, method = "wilcox.test")
+##Statistics for 6.	Lactococcus 
+intes.wilcox5 <- compare_means(Abundance ~ Regime, intes.taxa_la, method = "wilcox.test")
+##Statistics for 7.	Leuconostoc 
+intes.wilcox6 <- compare_means(Abundance ~ Regime, intes.taxa_le, method = "wilcox.test")
+##Statistics for 8.	Others 
+intes.wilcox7 <- compare_means(Abundance ~ Regime, intes.taxa_o, method = "wilcox.test")
+##Statistics for 9.	Pediococcus  
+intes.wilcox8 <- compare_means(Abundance ~ Regime, intes.taxa_ped, method = "wilcox.test")
+##Statistics for 10.	Photobacterium 
+intes.wilcox9 <- compare_means(Abundance ~ Regime, intes.taxa_ph, method = "wilcox.test")
+##Statistics for 11.	Polaromonas 
+intes.wilcox10 <- compare_means(Abundance ~ Regime, intes.taxa_po, method = "wilcox.test")
+##Statistics for 12.	Pseudomonas 
+intes.wilcox11 <- compare_means(Abundance ~ Regime, intes.taxa_p, method = "wilcox.test")
+##Statistics for 13.	Pseudorhodobacter 
+intes.wilcox12 <- compare_means(Abundance ~ Regime, intes.taxa_ps, method = "wilcox.test")
+##Statistics for 14.	Ruminococcaceae 
+intes.wilcox13 <- compare_means(Abundance ~ Regime, intes.taxa_r, method = "wilcox.test")
+##Statistics for 15.	Sphaerotillus 
+intes.wilcox14 <- compare_means(Abundance ~ Regime, intes.taxa_s, method = "wilcox.test")
+##Statistics for 16.	Yersinia 
+intes.wilcox15 <- compare_means(Abundance ~ Regime, intes.taxa_y, method = "wilcox.test")
+##Write the pairwise wilcox comparison for each individual taxonomy into a CSV file to annotate Figures  using adobe illustrator on any of the editing software later
+write.csv(intes.wilcox, file = "tables/intes.Wilcox pairwise comparison_Aeromonas.csv", row.names = FALSE)
+write.csv(intes.wilcox1, file = "tables/intes.Wilcox pairwise comparison_Bifidobacteriaceae.csv", row.names = FALSE)
+write.csv(intes.wilcox2, file = "tables/intes.Wilcox pairwise comparison_Enterococcus.csv", row.names = FALSE)
+write.csv(intes.wilcox3, file = "tables/intes.Wilcox pairwise comparison_Flavobacterium.csv", row.names = FALSE)
+write.csv(intes.wilcox4, file = "tables/intes.Wilcox pairwise comparison_Lactobacillus.csv", row.names = FALSE)
+write.csv(intes.wilcox5, file = "tables/intes.Wilcox pairwise comparison_Lactococcus.csv", row.names = FALSE)
+write.csv(intes.wilcox6, file = "tables/intes.Wilcox pairwise comparison_Leuconostoc.csv", row.names = FALSE)
+write.csv(intes.wilcox7, file = "tables/intes.Wilcox pairwise comparison_Others.csv", row.names = FALSE)
+write.csv(intes.wilcox8, file = "tables/intes.Wilcox pairwise comparison_Pediococcus.csv", row.names = FALSE)
+write.csv(intes.wilcox9, file = "tables/intes.Wilcox pairwise comparison_Photobacterium.csv", row.names = FALSE)
+write.csv(intes.wilcox10, file = "tables/intes.Wilcox pairwise comparison_Polaromonas.csv", row.names = FALSE)
+write.csv(intes.wilcox11, file = "tables/intes.Wilcox pairwise comparison_Pseudomonas.csv", row.names = FALSE)
+write.csv(intes.wilcox12, file = "tables/intes.Wilcox pairwise comparison_Pseudorhodobacter.csv", row.names = FALSE)
+write.csv(intes.wilcox13, file = "tables/intes.Wilcox pairwise comparison_Ruminococcaceae.csv", row.names = FALSE)
+write.csv(intes.wilcox14, file = "tables/intes.Wilcox pairwise comparison_Sphaerotillus.csv", row.names = FALSE)
+write.csv(intes.wilcox15, file = "tables/intes.Wilcox pairwise comparison_Yersinia.csv", row.names = FALSE)
+##save them as excel file
+openxlsx::write.xlsx(intes.wilcox, file = "tables/intes.Wilcox pairwise comparison_Aeromonas.xlsx")
+openxlsx::write.xlsx(intes.wilcox1, file = "tables/intes.Wilcox pairwise comparison_Bifidobacteriaceae.xlsx")
+openxlsx::write.xlsx(intes.wilcox2, file = "tables/intes.Wilcox pairwise comparison_Enterococcus.xlsx")
+openxlsx::write.xlsx(intes.wilcox3, file = "tables/intes.Wilcox pairwise comparison_Flavobacterium.xlsx")
+openxlsx::write.xlsx(intes.wilcox4, file = "tables/intes.Wilcox pairwise comparison_Lactobacillus.xlsx")
+openxlsx::write.xlsx(intes.wilcox5, file = "tables/intes.Wilcox pairwise comparison_Lactococcus.xlsx")
+openxlsx::write.xlsx(intes.wilcox6, file = "tables/intes.Wilcox pairwise comparison_Leuconostoc.xlsx")
+openxlsx::write.xlsx(intes.wilcox7, file = "tables/intes.Wilcox pairwise comparison_Others.xlsx")
+openxlsx::write.xlsx(intes.wilcox8, file = "tables/intes.Wilcox pairwise comparison_Pediococcus.xlsx")
+openxlsx::write.xlsx(intes.wilcox9, file = "tables/intes.Wilcox pairwise comparison_Photobacterium.xlsx")
+openxlsx::write.xlsx(intes.wilcox10, file = "tables/intes.Wilcox pairwise comparison_Polaromonas.xlsx")
+openxlsx::write.xlsx(intes.wilcox11, file = "tables/intes.Wilcox pairwise comparison_Pseudomonas.xlsx")
+openxlsx::write.xlsx(intes.wilcox12, file = "tables/intes.Wilcox pairwise comparison_Pseudorhodobacter.xlsx")
+openxlsx::write.xlsx(intes.wilcox13, file = "tables/intes.Wilcox pairwise comparison_Ruminococcaceae.xlsx")
+openxlsx::write.xlsx(intes.wilcox14, file = "tables/intes.Wilcox pairwise comparison_Sphaerotillus.xlsx")
+openxlsx::write.xlsx(intes.wilcox15, file = "tables/intes.Wilcox pairwise comparison_Yersinia.xlsx")
+
+```
+
+```{r}
+
+# intes at level of intes
+##Statistics for 1.	Ruminococcaceae 
+intes.wilcox.intes <- compare_means(Abundance ~ Regime, intes.taxa.intes_r, method = "wilcox.test")
+##Statistics for 2.	Bifidobacteriaceae 
+intes.wilcox.intes1 <- compare_means(Abundance ~ Regime, intes.taxa.intes_b, method = "wilcox.test")
+##Statistics for 3.	Pseudomonas 
+intes.wilcox.intes2 <- compare_means(Abundance ~ Regime, intes.taxa.intes_p, method = "wilcox.test")
+##Statistics for 4.	Photobacterium 
+intes.wilcox.intes3 <- compare_means(Abundance ~ Regime, intes.taxa.intes_ph, method = "wilcox.test")
+##Statistics for 5.	Pediococcus 
+intes.wilcox.intes4 <- compare_means(Abundance ~ Regime, intes.taxa.intes_ped, method = "wilcox.test")
+##Statistics for 6.	Lactobacillus 
+intes.wilcox.intes5 <- compare_means(Abundance ~ Regime, intes.taxa.intes_l, method = "wilcox.test")
+##Statistics for 7.	Lactococcus 
+intes.wilcox.intes6 <- compare_means(Abundance ~ Regime, intes.taxa.intes_la, method = "wilcox.test")
+##Statistics for 8.	Leuconostoc 
+intes.wilcox.intes7 <- compare_means(Abundance ~ Regime, intes.taxa.intes_le, method = "wilcox.test")
+##Statistics for 9.	Acinetobacter  
+intes.wilcox.intes8 <- compare_means(Abundance ~ Regime, intes.taxa.intes_ac, method = "wilcox.test")
+##Statistics for 10.	Enterococcus 
+intes.wilcox.intes9 <- compare_means(Abundance ~ Regime, intes.taxa.intes_e, method = "wilcox.test")
+##Statistics for 11.	Escherichia-Shigella 
+intes.wilcox.intes10 <- compare_means(Abundance ~ Regime, intes.taxa.intes_es, method = "wilcox.test")
+##Statistics for 12.	Staphylococcus 
+intes.wilcox.intes11 <- compare_means(Abundance ~ Regime, intes.taxa.intes_st, method = "wilcox.test")
+##Statistics for 13.	Cutibacterium 
+intes.wilcox.intes12 <- compare_means(Abundance ~ Regime, intes.taxa.intes_cut, method = "wilcox.test")
+##Statistics for 14.	Yersinia 
+intes.wilcox.intes13 <- compare_means(Abundance ~ Regime, intes.taxa.intes_y, method = "wilcox.test")
+##Statistics for 15.	Aeromonas 
+intes.wilcox.intes14 <- compare_means(Abundance ~ Regime, intes.taxa.intes_a, method = "wilcox.test")
+##Statistics for 16.	OTHERS 
+intes.wilcox.intes15 <- compare_means(Abundance ~ Regime, intes.taxa.intes_o, method = "wilcox.test")
+##Write the pairwise wilcox comparison for each individual taxonomy into a CSV file to annotate Figures  using adobe illustrator on any of the editing software later
+write.csv(intes.wilcox.intes, file = "tables/intes.Wilcox.intes pairwise comparison_Ruminococcaceae.csv", row.names = FALSE)
+write.csv(intes.wilcox.intes1, file = "tables/intes.Wilcox.intes pairwise comparison_Bifidobacteriaceae.csv", row.names = FALSE)
+write.csv(intes.wilcox.intes2, file = "tables/intes.Wilcox.intes pairwise comparison_Pseudomonas.csv", row.names = FALSE)
+write.csv(intes.wilcox.intes3, file = "tables/intes.Wilcox.intes pairwise comparison_Photobacterium.csv", row.names = FALSE)
+write.csv(intes.wilcox.intes4, file = "tables/intes.Wilcox.intes pairwise comparison_Pediococcus.csv", row.names = FALSE)
+write.csv(intes.wilcox.intes5, file = "tables/intes.Wilcox.intes pairwise comparison_Lactobacillus.csv", row.names = FALSE)
+write.csv(intes.wilcox.intes6, file = "tables/intes.Wilcox.intes pairwise comparison_Lactococcus.csv", row.names = FALSE)
+write.csv(intes.wilcox.intes7, file = "tables/intes.Wilcox.intes pairwise comparison_Leuconostoc.csv", row.names = FALSE)
+write.csv(intes.wilcox.intes8, file = "tables/intes.Wilcox.intes pairwise comparison_Acinetobacter.csv", row.names = FALSE)
+write.csv(intes.wilcox.intes9, file = "tables/intes.Wilcox.intes pairwise comparison_Enterococcus.csv", row.names = FALSE)
+write.csv(intes.wilcox.intes10, file = "tables/intes.Wilcox.intes pairwise comparison_Escherichia-Shigella.csv", row.names = FALSE)
+write.csv(intes.wilcox.intes11, file = "tables/intes.Wilcox.intes pairwise comparison_Staphylococcus.csv", row.names = FALSE)
+write.csv(intes.wilcox.intes12, file = "tables/intes.Wilcox.intes pairwise comparison_Cutibacterium.csv", row.names = FALSE)
+write.csv(intes.wilcox.intes13, file = "tables/intes.Wilcox.intes pairwise comparison_Yersinia.csv", row.names = FALSE)
+write.csv(intes.wilcox.intes14, file = "tables/intes.Wilcox.intes pairwise comparison_Aeromonas.csv", row.names = FALSE)
+write.csv(intes.wilcox.intes15, file = "tables/intes.Wilcox.intes pairwise comparison_OTHERS.csv", row.names = FALSE)
+##save them as excel file
+openxlsx::write.xlsx(intes.wilcox.intes, file = "tables/intes.Wilcox.intes pairwise comparison_Ruminococcaceae.xlsx")
+openxlsx::write.xlsx(intes.wilcox.intes1, file = "tables/intes.Wilcox.intes pairwise comparison_Bifidobacteriaceae.xlsx")
+openxlsx::write.xlsx(intes.wilcox.intes2, file = "tables/intes.Wilcox.intes pairwise comparison_Pseudomonas.xlsx")
+openxlsx::write.xlsx(intes.wilcox.intes3, file = "tables/intes.Wilcox.intes pairwise comparison_Photobacterium.xlsx")
+openxlsx::write.xlsx(intes.wilcox.intes4, file = "tables/intes.Wilcox.intes pairwise comparison_Pediococcus.xlsx")
+openxlsx::write.xlsx(intes.wilcox.intes5, file = "tables/intes.Wilcox.intes pairwise comparison_Lactobacillus.xlsx")
+openxlsx::write.xlsx(intes.wilcox.intes6, file = "tables/intes.Wilcox.intes pairwise comparison_Lactococcus.xlsx")
+openxlsx::write.xlsx(intes.wilcox.intes7, file = "tables/intes.Wilcox.intes pairwise comparison_Leuconostoc.xlsx")
+openxlsx::write.xlsx(intes.wilcox.intes8, file = "tables/intes.Wilcox.intes pairwise comparison_Acinetobacter.xlsx")
+openxlsx::write.xlsx(intes.wilcox.intes9, file = "tables/intes.Wilcox.intes pairwise comparison_Enterococcus.xlsx")
+openxlsx::write.xlsx(intes.wilcox.intes10, file = "tables/intes.Wilcox.intes pairwise comparison_Escherichia-Shigella.xlsx")
+openxlsx::write.xlsx(intes.wilcox.intes11, file = "tables/intes.Wilcox.intes pairwise comparison_Staphylococcus.xlsx")
+openxlsx::write.xlsx(intes.wilcox.intes12, file = "tables/intes.Wilcox.intes pairwise comparison_Cutibacterium.xlsx")
+openxlsx::write.xlsx(intes.wilcox.intes13, file = "tables/intes.Wilcox.intes pairwise comparison_Yersinia.xlsx")
+openxlsx::write.xlsx(intes.wilcox.intes14, file = "tables/intes.Wilcox.intes pairwise comparison_Aeromonas.xlsx")
+openxlsx::write.xlsx(intes.wilcox.intes15, file = "tables/intes.Wilcox.intes pairwise comparison_OTHERS.xlsx")
+
+```
+
+```{r}
+# water
+##Statistics for 1.	Aeromonas 
+water.wilcox <- compare_means(Abundance ~ Regime, water.taxa_a, method = "wilcox.test")
+##Statistics for 2.	Bifidobacteriaceae 
+water.wilcox1 <- compare_means(Abundance ~ Regime, water.taxa_b, method = "wilcox.test")
+##Statistics for 3.	Enterococcus 
+water.wilcox2 <- compare_means(Abundance ~ Regime, water.taxa_e, method = "wilcox.test")
+##Statistics for 4.	Flavobacterium 
+water.wilcox3 <- compare_means(Abundance ~ Regime, water.taxa_f, method = "wilcox.test")
+##Statistics for 5.	Lactobacillus 
+water.wilcox4 <- compare_means(Abundance ~ Regime, water.taxa_l, method = "wilcox.test")
+##Statistics for 6.	Lactococcus 
+water.wilcox5 <- compare_means(Abundance ~ Regime, water.taxa_la, method = "wilcox.test")
+##Statistics for 7.	Leuconostoc 
+water.wilcox6 <- compare_means(Abundance ~ Regime, water.taxa_le, method = "wilcox.test")
+##Statistics for 8.	Others 
+water.wilcox7 <- compare_means(Abundance ~ Regime, water.taxa_o, method = "wilcox.test")
+##Statistics for 9.	Pediococcus  
+water.wilcox8 <- compare_means(Abundance ~ Regime, water.taxa_ped, method = "wilcox.test")
+##Statistics for 10.	Photobacterium 
+water.wilcox9 <- compare_means(Abundance ~ Regime, water.taxa_ph, method = "wilcox.test")
+##Statistics for 11.	Polaromonas 
+water.wilcox10 <- compare_means(Abundance ~ Regime, water.taxa_po, method = "wilcox.test")
+##Statistics for 12.	Pseudomonas 
+water.wilcox11 <- compare_means(Abundance ~ Regime, water.taxa_p, method = "wilcox.test")
+##Statistics for 13.	Pseudorhodobacter 
+water.wilcox12 <- compare_means(Abundance ~ Regime, water.taxa_ps, method = "wilcox.test")
+##Statistics for 14.	Ruminococcaceae 
+water.wilcox13 <- compare_means(Abundance ~ Regime, water.taxa_r, method = "wilcox.test")
+##Statistics for 15.	Sphaerotillus 
+water.wilcox14 <- compare_means(Abundance ~ Regime, water.taxa_s, method = "wilcox.test")
+##Statistics for 16.	Yersinia 
+water.wilcox15 <- compare_means(Abundance ~ Regime, water.taxa_y, method = "wilcox.test")
+##Write the pairwise wilcox comparison for each individual taxonomy into a CSV file to annotate Figures  using adobe illustrator on any of the editing software later
+write.csv(water.wilcox, file = "tables/water.Wilcox pairwise comparison_Aeromonas.csv", row.names = FALSE)
+write.csv(water.wilcox1, file = "tables/water.Wilcox pairwise comparison_Bifidobacteriaceae.csv", row.names = FALSE)
+write.csv(water.wilcox2, file = "tables/water.Wilcox pairwise comparison_Enterococcus.csv", row.names = FALSE)
+write.csv(water.wilcox3, file = "tables/water.Wilcox pairwise comparison_Flavobacterium.csv", row.names = FALSE)
+write.csv(water.wilcox4, file = "tables/water.Wilcox pairwise comparison_Lactobacillus.csv", row.names = FALSE)
+write.csv(water.wilcox5, file = "tables/water.Wilcox pairwise comparison_Lactococcus.csv", row.names = FALSE)
+write.csv(water.wilcox6, file = "tables/water.Wilcox pairwise comparison_Leuconostoc.csv", row.names = FALSE)
+write.csv(water.wilcox7, file = "tables/water.Wilcox pairwise comparison_Others.csv", row.names = FALSE)
+write.csv(water.wilcox8, file = "tables/water.Wilcox pairwise comparison_Pediococcus.csv", row.names = FALSE)
+write.csv(water.wilcox9, file = "tables/water.Wilcox pairwise comparison_Photobacterium.csv", row.names = FALSE)
+write.csv(water.wilcox10, file = "tables/water.Wilcox pairwise comparison_Polaromonas.csv", row.names = FALSE)
+write.csv(water.wilcox11, file = "tables/water.Wilcox pairwise comparison_Pseudomonas.csv", row.names = FALSE)
+write.csv(water.wilcox12, file = "tables/water.Wilcox pairwise comparison_Pseudorhodobacter.csv", row.names = FALSE)
+write.csv(water.wilcox13, file = "tables/water.Wilcox pairwise comparison_Ruminococcaceae.csv", row.names = FALSE)
+write.csv(water.wilcox14, file = "tables/water.Wilcox pairwise comparison_Sphaerotillus.csv", row.names = FALSE)
+write.csv(water.wilcox15, file = "tables/water.Wilcox pairwise comparison_Yersinia.csv", row.names = FALSE)
+##save them as excel file
+openxlsx::write.xlsx(water.wilcox, file = "tables/water.Wilcox pairwise comparison_Aeromonas.xlsx")
+openxlsx::write.xlsx(water.wilcox1, file = "tables/water.Wilcox pairwise comparison_Bifidobacteriaceae.xlsx")
+openxlsx::write.xlsx(water.wilcox2, file = "tables/water.Wilcox pairwise comparison_Enterococcus.xlsx")
+openxlsx::write.xlsx(water.wilcox3, file = "tables/water.Wilcox pairwise comparison_Flavobacterium.xlsx")
+openxlsx::write.xlsx(water.wilcox4, file = "tables/water.Wilcox pairwise comparison_Lactobacillus.xlsx")
+openxlsx::write.xlsx(water.wilcox5, file = "tables/water.Wilcox pairwise comparison_Lactococcus.xlsx")
+openxlsx::write.xlsx(water.wilcox6, file = "tables/water.Wilcox pairwise comparison_Leuconostoc.xlsx")
+openxlsx::write.xlsx(water.wilcox7, file = "tables/water.Wilcox pairwise comparison_Others.xlsx")
+openxlsx::write.xlsx(water.wilcox8, file = "tables/water.Wilcox pairwise comparison_Pediococcus.xlsx")
+openxlsx::write.xlsx(water.wilcox9, file = "tables/water.Wilcox pairwise comparison_Photobacterium.xlsx")
+openxlsx::write.xlsx(water.wilcox10, file = "tables/water.Wilcox pairwise comparison_Polaromonas.xlsx")
+openxlsx::write.xlsx(water.wilcox11, file = "tables/water.Wilcox pairwise comparison_Pseudomonas.xlsx")
+openxlsx::write.xlsx(water.wilcox12, file = "tables/water.Wilcox pairwise comparison_Pseudorhodobacter.xlsx")
+openxlsx::write.xlsx(water.wilcox13, file = "tables/water.Wilcox pairwise comparison_Ruminococcaceae.xlsx")
+openxlsx::write.xlsx(water.wilcox14, file = "tables/water.Wilcox pairwise comparison_Sphaerotillus.xlsx")
+openxlsx::write.xlsx(water.wilcox15, file = "tables/water.Wilcox pairwise comparison_Yersinia.xlsx")
+
+```
+
+```{r}
+# water at level of water
+##Statistics for 1.	Aeromonas 
+water.wilcox.water <- compare_means(Abundance ~ Regime, water.taxa.water_aa, method = "wilcox.test")
+##Statistics for 2.	Arsenicibacter 
+water.wilcox.water1 <- compare_means(Abundance ~ Regime, water.taxa.water_ar, method = "wilcox.test")
+##Statistics for 3.	Flavobacterium 
+water.wilcox.water2 <- compare_means(Abundance ~ Regime, water.taxa.water_f, method = "wilcox.test")
+##Statistics for 4.	Leptothrix 
+water.wilcox.water3 <- compare_means(Abundance ~ Regime, water.taxa.water_le, method = "wilcox.test")
+##Statistics for 5.	Luteolibacter 
+water.wilcox.water4 <- compare_means(Abundance ~ Regime, water.taxa.water_lu, method = "wilcox.test")
+##Statistics for 6.	Microtrichaceae 
+water.wilcox.water5 <- compare_means(Abundance ~ Regime, water.taxa.water_m, method = "wilcox.test")
+##Statistics for 7.	Novosphingobium 
+water.wilcox.water6 <- compare_means(Abundance ~ Regime, water.taxa.water_n, method = "wilcox.test")
+##Statistics for 8.	Polaromonas 
+water.wilcox.water7 <- compare_means(Abundance ~ Regime, water.taxa.water_po, method = "wilcox.test")
+##Statistics for 9.	Pseudorhodobacter  
+water.wilcox.water8 <- compare_means(Abundance ~ Regime, water.taxa.water_ps, method = "wilcox.test")
+##Statistics for 10.	Rhodobacter 
+water.wilcox.water9 <- compare_means(Abundance ~ Regime, water.taxa.water_rb, method = "wilcox.test")
+##Statistics for 11.	Rubrivivax 
+water.wilcox.water10 <- compare_means(Abundance ~ Regime, water.taxa.water_rx, method = "wilcox.test")
+##Statistics for 12.	Rhodoferax 
+water.wilcox.water11 <- compare_means(Abundance ~ Regime, water.taxa.water_rf, method = "wilcox.test")
+##Statistics for 13.	Saprospiraceae 
+water.wilcox.water12 <- compare_means(Abundance ~ Regime, water.taxa.water_sa, method = "wilcox.test")
+##Statistics for 14.	Sediminibacterium 
+water.wilcox.water13 <- compare_means(Abundance ~ Regime, water.taxa.water_sed, method = "wilcox.test")
+##Statistics for 15.	Sphaerotilus 
+water.wilcox.water14 <- compare_means(Abundance ~ Regime, water.taxa.water_s, method = "wilcox.test")
+##Statistics for 16.	OTHERs 
+water.wilcox.water15 <- compare_means(Abundance ~ Regime, water.taxa.water_o, method = "wilcox.test")
+##Write the pairwise wilcox comparison for each individual taxonomy into a CSV file to annotate Figures  using adobe illustrator on any of the editing software later
+write.csv(water.wilcox.water, file = "tables/water.Wilcox.water pairwise comparison_AAP99.csv", row.names = FALSE)
+write.csv(water.wilcox.water1, file = "tables/water.Wilcox.water pairwise comparison_Arsenicibacter.csv", row.names = FALSE)
+write.csv(water.wilcox.water2, file = "tables/water.Wilcox.water pairwise comparison_Flavobacterium.csv", row.names = FALSE)
+write.csv(water.wilcox.water3, file = "tables/water.Wilcox.water pairwise comparison_Leptothrix.csv", row.names = FALSE)
+write.csv(water.wilcox.water4, file = "tables/water.Wilcox.water pairwise comparison_Luteolibacter.csv", row.names = FALSE)
+write.csv(water.wilcox.water5, file = "tables/water.Wilcox.water pairwise comparison_Microtrichaceae.csv", row.names = FALSE)
+write.csv(water.wilcox.water6, file = "tables/water.Wilcox.water pairwise comparison_Novosphingobium.csv", row.names = FALSE)
+write.csv(water.wilcox.water7, file = "tables/water.Wilcox.water pairwise comparison_Polaromonas.csv", row.names = FALSE)
+write.csv(water.wilcox.water8, file = "tables/water.Wilcox.water pairwise comparison_Pseudorhodobacter.csv", row.names = FALSE)
+write.csv(water.wilcox.water9, file = "tables/water.Wilcox.water pairwise comparison_Rhodobacter.csv", row.names = FALSE)
+write.csv(water.wilcox.water10, file = "tables/water.Wilcox.water pairwise comparison_Rubrivivax.csv", row.names = FALSE)
+write.csv(water.wilcox.water11, file = "tables/water.Wilcox.water pairwise comparison_Rhodoferax.csv", row.names = FALSE)
+write.csv(water.wilcox.water12, file = "tables/water.Wilcox.water pairwise comparison_Saprospiraceae.csv", row.names = FALSE)
+write.csv(water.wilcox.water13, file = "tables/water.Wilcox.water pairwise comparison_Sediminibacterium.csv", row.names = FALSE)
+write.csv(water.wilcox.water14, file = "tables/water.Wilcox.water pairwise comparison_Sphaerotilus.csv", row.names = FALSE)
+write.csv(water.wilcox.water15, file = "tables/water.Wilcox.water pairwise comparison_OTHERs.csv", row.names = FALSE)
+##save them as excel file
+openxlsx::write.xlsx(water.wilcox.water, file = "tables/water.Wilcox.water pairwise comparison_AAP99.xlsx")
+openxlsx::write.xlsx(water.wilcox.water1, file = "tables/water.Wilcox.water pairwise comparison_Arsenicibacter.xlsx")
+openxlsx::write.xlsx(water.wilcox.water2, file = "tables/water.Wilcox.water pairwise comparison_Flavobacterium.xlsx")
+openxlsx::write.xlsx(water.wilcox.water3, file = "tables/water.Wilcox.water pairwise comparison_Leptothrix.xlsx")
+openxlsx::write.xlsx(water.wilcox.water4, file = "tables/water.Wilcox.water pairwise comparison_Luteolibacter.xlsx")
+openxlsx::write.xlsx(water.wilcox.water5, file = "tables/water.Wilcox.water pairwise comparison_Microtrichaceae.xlsx")
+openxlsx::write.xlsx(water.wilcox.water6, file = "tables/water.Wilcox.water pairwise comparison_Novosphingobium.xlsx")
+openxlsx::write.xlsx(water.wilcox.water7, file = "tables/water.Wilcox.water pairwise comparison_Polaromonas.xlsx")
+openxlsx::write.xlsx(water.wilcox.water8, file = "tables/water.Wilcox.water pairwise comparison_Pseudorhodobacter.xlsx")
+openxlsx::write.xlsx(water.wilcox.water9, file = "tables/water.Wilcox.water pairwise comparison_Rhodobacter.xlsx")
+openxlsx::write.xlsx(water.wilcox.water10, file = "tables/water.Wilcox.water pairwise comparison_Rubrivivax.xlsx")
+openxlsx::write.xlsx(water.wilcox.water11, file = "tables/water.Wilcox.water pairwise comparison_Rhodoferax.xlsx")
+openxlsx::write.xlsx(water.wilcox.water12, file = "tables/water.Wilcox.water pairwise comparison_Saprospiraceae.xlsx")
+openxlsx::write.xlsx(water.wilcox.water13, file = "tables/water.Wilcox.water pairwise comparison_Sediminibacterium.xlsx")
+openxlsx::write.xlsx(water.wilcox.water14, file = "tables/water.Wilcox.water pairwise comparison_Sphaerotilus.xlsx")
+openxlsx::write.xlsx(water.wilcox.water15, file = "tables/water.Wilcox.water pairwise comparison_OTHERs.xlsx")
+
+```
+
+```{r}
+# feed
+##Statistics for 1.	Aeromonas 
+feed.wilcox <- compare_means(Abundance ~ Regime, feed.taxa_a, method = "wilcox.test")
+##Statistics for 2.	Bifidobacteriaceae 
+feed.wilcox1 <- compare_means(Abundance ~ Regime, feed.taxa_b, method = "wilcox.test")
+##Statistics for 3.	Enterococcus 
+feed.wilcox2 <- compare_means(Abundance ~ Regime, feed.taxa_e, method = "wilcox.test")
+##Statistics for 4.	Flavobacterium 
+feed.wilcox3 <- compare_means(Abundance ~ Regime, feed.taxa_f, method = "wilcox.test")
+##Statistics for 5.	Lactobacillus 
+feed.wilcox4 <- compare_means(Abundance ~ Regime, feed.taxa_l, method = "wilcox.test")
+##Statistics for 6.	Lactococcus 
+feed.wilcox5 <- compare_means(Abundance ~ Regime, feed.taxa_la, method = "wilcox.test")
+##Statistics for 7.	Leuconostoc 
+feed.wilcox6 <- compare_means(Abundance ~ Regime, feed.taxa_le, method = "wilcox.test")
+##Statistics for 8.	Others 
+feed.wilcox7 <- compare_means(Abundance ~ Regime, feed.taxa_o, method = "wilcox.test")
+##Statistics for 9.	Pediococcus  
+feed.wilcox8 <- compare_means(Abundance ~ Regime, feed.taxa_ped, method = "wilcox.test")
+##Statistics for 10.	Photobacterium 
+feed.wilcox9 <- compare_means(Abundance ~ Regime, feed.taxa_ph, method = "wilcox.test")
+##Statistics for 11.	Polaromonas 
+feed.wilcox10 <- compare_means(Abundance ~ Regime, feed.taxa_po, method = "wilcox.test")
+##Statistics for 12.	Pseudomonas 
+feed.wilcox11 <- compare_means(Abundance ~ Regime, feed.taxa_p, method = "wilcox.test")
+##Statistics for 13.	Pseudorhodobacter 
+feed.wilcox12 <- compare_means(Abundance ~ Regime, feed.taxa_ps, method = "wilcox.test")
+##Statistics for 14.	Ruminococcaceae 
+feed.wilcox13 <- compare_means(Abundance ~ Regime, feed.taxa_r, method = "wilcox.test")
+##Statistics for 15.	Sphaerotillus 
+feed.wilcox14 <- compare_means(Abundance ~ Regime, feed.taxa_s, method = "wilcox.test")
+##Statistics for 16.	Yersinia 
+feed.wilcox15 <- compare_means(Abundance ~ Regime, feed.taxa_y, method = "wilcox.test")
+##Write the pairwise wilcox comparison for each individual taxonomy into a CSV file to annotate Figures  using adobe illustrator on any of the editing software later
+write.csv(feed.wilcox, file = "tables/feed.Wilcox pairwise comparison_Aeromonas.csv", row.names = FALSE)
+write.csv(feed.wilcox1, file = "tables/feed.Wilcox pairwise comparison_Bifidobacteriaceae.csv", row.names = FALSE)
+write.csv(feed.wilcox2, file = "tables/feed.Wilcox pairwise comparison_Enterococcus.csv", row.names = FALSE)
+write.csv(feed.wilcox3, file = "tables/feed.Wilcox pairwise comparison_Flavobacterium.csv", row.names = FALSE)
+write.csv(feed.wilcox4, file = "tables/feed.Wilcox pairwise comparison_Lactobacillus.csv", row.names = FALSE)
+write.csv(feed.wilcox5, file = "tables/feed.Wilcox pairwise comparison_Lactococcus.csv", row.names = FALSE)
+write.csv(feed.wilcox6, file = "tables/feed.Wilcox pairwise comparison_Leuconostoc.csv", row.names = FALSE)
+write.csv(feed.wilcox7, file = "tables/feed.Wilcox pairwise comparison_Others.csv", row.names = FALSE)
+write.csv(feed.wilcox8, file = "tables/feed.Wilcox pairwise comparison_Pediococcus.csv", row.names = FALSE)
+write.csv(feed.wilcox9, file = "tables/feed.Wilcox pairwise comparison_Photobacterium.csv", row.names = FALSE)
+write.csv(feed.wilcox10, file = "tables/feed.Wilcox pairwise comparison_Polaromonas.csv", row.names = FALSE)
+write.csv(feed.wilcox11, file = "tables/feed.Wilcox pairwise comparison_Pseudomonas.csv", row.names = FALSE)
+write.csv(feed.wilcox12, file = "tables/feed.Wilcox pairwise comparison_Pseudorhodobacter.csv", row.names = FALSE)
+write.csv(feed.wilcox13, file = "tables/feed.Wilcox pairwise comparison_Ruminococcaceae.csv", row.names = FALSE)
+write.csv(feed.wilcox14, file = "tables/feed.Wilcox pairwise comparison_Sphaerotillus.csv", row.names = FALSE)
+write.csv(feed.wilcox15, file = "tables/feed.Wilcox pairwise comparison_Yersinia.csv", row.names = FALSE)
+##save them as excel file
+openxlsx::write.xlsx(feed.wilcox, file = "tables/feed.Wilcox pairwise comparison_Aeromonas.xlsx")
+openxlsx::write.xlsx(feed.wilcox1, file = "tables/feed.Wilcox pairwise comparison_Bifidobacteriaceae.xlsx")
+openxlsx::write.xlsx(feed.wilcox2, file = "tables/feed.Wilcox pairwise comparison_Enterococcus.xlsx")
+openxlsx::write.xlsx(feed.wilcox3, file = "tables/feed.Wilcox pairwise comparison_Flavobacterium.xlsx")
+openxlsx::write.xlsx(feed.wilcox4, file = "tables/feed.Wilcox pairwise comparison_Lactobacillus.xlsx")
+openxlsx::write.xlsx(feed.wilcox5, file = "tables/feed.Wilcox pairwise comparison_Lactococcus.xlsx")
+openxlsx::write.xlsx(feed.wilcox6, file = "tables/feed.Wilcox pairwise comparison_Leuconostoc.xlsx")
+openxlsx::write.xlsx(feed.wilcox7, file = "tables/feed.Wilcox pairwise comparison_Others.xlsx")
+openxlsx::write.xlsx(feed.wilcox8, file = "tables/feed.Wilcox pairwise comparison_Pediococcus.xlsx")
+openxlsx::write.xlsx(feed.wilcox9, file = "tables/feed.Wilcox pairwise comparison_Photobacterium.xlsx")
+openxlsx::write.xlsx(feed.wilcox10, file = "tables/feed.Wilcox pairwise comparison_Polaromonas.xlsx")
+openxlsx::write.xlsx(feed.wilcox11, file = "tables/feed.Wilcox pairwise comparison_Pseudomonas.xlsx")
+openxlsx::write.xlsx(feed.wilcox12, file = "tables/feed.Wilcox pairwise comparison_Pseudorhodobacter.xlsx")
+openxlsx::write.xlsx(feed.wilcox13, file = "tables/feed.Wilcox pairwise comparison_Ruminococcaceae.xlsx")
+openxlsx::write.xlsx(feed.wilcox14, file = "tables/feed.Wilcox pairwise comparison_Sphaerotillus.xlsx")
+openxlsx::write.xlsx(feed.wilcox15, file = "tables/feed.Wilcox pairwise comparison_Yersinia.xlsx")
+
+```
+
+```{r}
+# feed at level of feed
+##Statistics for 1.	Bifidobacteriaceae 
+feed.wilcox.feed <- compare_means(Abundance ~ Regime, feed.taxa.feed_b, method = "wilcox.test")
+##Statistics for 2.	Clostridium sensu stricto 7 
+feed.wilcox.feed1 <- compare_means(Abundance ~ Regime, feed.taxa.feed_c, method = "wilcox.test")
+##Statistics for 3.	Clostridiaceae 
+feed.wilcox.feed2 <- compare_means(Abundance ~ Regime, feed.taxa.feed_cc, method = "wilcox.test")
+##Statistics for 4.	Fusobacterium 
+feed.wilcox.feed3 <- compare_means(Abundance ~ Regime, feed.taxa.feed_f, method = "wilcox.test")
+##Statistics for 5.	Janthinobacterium 
+feed.wilcox.feed4 <- compare_means(Abundance ~ Regime, feed.taxa.feed_j, method = "wilcox.test")
+##Statistics for 6.	Lactobacillus 
+feed.wilcox.feed5 <- compare_means(Abundance ~ Regime, feed.taxa.feed_l, method = "wilcox.test")
+##Statistics for 7.	Lactococcus 
+feed.wilcox.feed6 <- compare_means(Abundance ~ Regime, feed.taxa.feed_la, method = "wilcox.test")
+##Statistics for 8.	Leuconostoc 
+feed.wilcox.feed7 <- compare_means(Abundance ~ Regime, feed.taxa.feed_le, method = "wilcox.test")
+##Statistics for 9.	Pediococcus  
+feed.wilcox.feed8 <- compare_means(Abundance ~ Regime, feed.taxa.feed_p, method = "wilcox.test")
+##Statistics for 10.	Photobacterium 
+feed.wilcox.feed9 <- compare_means(Abundance ~ Regime, feed.taxa.feed_ph, method = "wilcox.test")
+##Statistics for 11.	Psychrilyobacter 
+feed.wilcox.feed10 <- compare_means(Abundance ~ Regime, feed.taxa.feed_py, method = "wilcox.test")
+##Statistics for 12.	Shewanella 
+feed.wilcox.feed11 <- compare_means(Abundance ~ Regime, feed.taxa.feed_sh, method = "wilcox.test")
+##Statistics for 13.	Streptococcus 
+feed.wilcox.feed12 <- compare_means(Abundance ~ Regime, feed.taxa.feed_st, method = "wilcox.test")
+##Statistics for 14.	Tepidimicrobium 
+feed.wilcox.feed13 <- compare_means(Abundance ~ Regime, feed.taxa.feed_t, method = "wilcox.test")
+##Statistics for 15.	Weissella 
+feed.wilcox.feed14 <- compare_means(Abundance ~ Regime, feed.taxa.feed_w, method = "wilcox.test")
+##Statistics for 16.	others 
+feed.wilcox.feed15 <- compare_means(Abundance ~ Regime, feed.taxa.feed_o, method = "wilcox.test")
+##Write the pairwise wilcox comparison for each individual taxonomy into a CSV file to annotate Figures  using adobe illustrator on any of the editing software later
+write.csv(feed.wilcox.feed, file = "tables/feed.Wilcox.feed pairwise comparison_Bifidobacteriaceae.csv", row.names = FALSE)
+write.csv(feed.wilcox.feed1, file = "tables/feed.Wilcox.feed pairwise comparison_Clostridium sensu stricto 7.csv", row.names = FALSE)
+write.csv(feed.wilcox.feed2, file = "tables/feed.Wilcox.feed pairwise comparison_Clostridiaceae.csv", row.names = FALSE)
+write.csv(feed.wilcox.feed3, file = "tables/feed.Wilcox.feed pairwise comparison_Fusobacterium.csv", row.names = FALSE)
+write.csv(feed.wilcox.feed4, file = "tables/feed.Wilcox.feed pairwise comparison_Janthinobacterium.csv", row.names = FALSE)
+write.csv(feed.wilcox.feed5, file = "tables/feed.Wilcox.feed pairwise comparison_Lactobacillus.csv", row.names = FALSE)
+write.csv(feed.wilcox.feed6, file = "tables/feed.Wilcox.feed pairwise comparison_Lactococcus.csv", row.names = FALSE)
+write.csv(feed.wilcox.feed7, file = "tables/feed.Wilcox.feed pairwise comparison_Leuconostoc.csv", row.names = FALSE)
+write.csv(feed.wilcox.feed8, file = "tables/feed.Wilcox.feed pairwise comparison_Pediococcus.csv", row.names = FALSE)
+write.csv(feed.wilcox.feed9, file = "tables/feed.Wilcox.feed pairwise comparison_Photobacterium.csv", row.names = FALSE)
+write.csv(feed.wilcox.feed10, file = "tables/feed.Wilcox.feed pairwise comparison_Psychrilyobacter.csv", row.names = FALSE)
+write.csv(feed.wilcox.feed11, file = "tables/feed.Wilcox.feed pairwise comparison_Shewanella.csv", row.names = FALSE)
+write.csv(feed.wilcox.feed12, file = "tables/feed.Wilcox.feed pairwise comparison_Streptococcus.csv", row.names = FALSE)
+write.csv(feed.wilcox.feed13, file = "tables/feed.Wilcox.feed pairwise comparison_Tepidimicrobium.csv", row.names = FALSE)
+write.csv(feed.wilcox.feed14, file = "tables/feed.Wilcox.feed pairwise comparison_Weissella.csv", row.names = FALSE)
+write.csv(feed.wilcox.feed15, file = "tables/feed.Wilcox.feed pairwise comparison_others.csv", row.names = FALSE)
+##save them as excel file
+openxlsx::write.xlsx(feed.wilcox.feed, file = "tables/feed.Wilcox.feed pairwise comparison_Bifidobacteriaceae.xlsx")
+openxlsx::write.xlsx(feed.wilcox.feed1, file = "tables/feed.Wilcox.feed pairwise comparison_Clostridium sensu stricto 7.xlsx")
+openxlsx::write.xlsx(feed.wilcox.feed2, file = "tables/feed.Wilcox.feed pairwise comparison_Clostridiaceae.xlsx")
+openxlsx::write.xlsx(feed.wilcox.feed3, file = "tables/feed.Wilcox.feed pairwise comparison_Fusobacterium.xlsx")
+openxlsx::write.xlsx(feed.wilcox.feed4, file = "tables/feed.Wilcox.feed pairwise comparison_Janthinobacterium.xlsx")
+openxlsx::write.xlsx(feed.wilcox.feed5, file = "tables/feed.Wilcox.feed pairwise comparison_Lactobacillus.xlsx")
+openxlsx::write.xlsx(feed.wilcox.feed6, file = "tables/feed.Wilcox.feed pairwise comparison_Lactococcus.xlsx")
+openxlsx::write.xlsx(feed.wilcox.feed7, file = "tables/feed.Wilcox.feed pairwise comparison_Leuconostoc.xlsx")
+openxlsx::write.xlsx(feed.wilcox.feed8, file = "tables/feed.Wilcox.feed pairwise comparison_Pediococcus.xlsx")
+openxlsx::write.xlsx(feed.wilcox.feed9, file = "tables/feed.Wilcox.feed pairwise comparison_Photobacterium.xlsx")
+openxlsx::write.xlsx(feed.wilcox.feed10, file = "tables/feed.Wilcox.feed pairwise comparison_Psychrilyobacter.xlsx")
+openxlsx::write.xlsx(feed.wilcox.feed11, file = "tables/feed.Wilcox.feed pairwise comparison_Shewanella.xlsx")
+openxlsx::write.xlsx(feed.wilcox.feed12, file = "tables/feed.Wilcox.feed pairwise comparison_Streptococcus.xlsx")
+openxlsx::write.xlsx(feed.wilcox.feed13, file = "tables/feed.Wilcox.feed pairwise comparison_Tepidimicrobium.xlsx")
+openxlsx::write.xlsx(feed.wilcox.feed14, file = "tables/feed.Wilcox.feed pairwise comparison_Weissella.xlsx")
+openxlsx::write.xlsx(feed.wilcox.feed15, file = "tables/feed.Wilcox.feed pairwise comparison_others.xlsx")
+```
+
+```{r}
+# intes
+taxa_intestine <- filter(taxa_tab1, sample == "intestine")
+openxlsx::write.xlsx(taxa_intestine, file = "tables/taxa_intestine.xlsx")
+
+# water
+taxa_water <- filter(taxa_tab1, sample == "water")
+openxlsx::write.xlsx(taxa_water, file = "tables/taxa_water.xlsx")
+
+# feed
+taxa_feed <- filter(taxa_tab1, sample == "feed")
+openxlsx::write.xlsx(taxa_feed, file = "tables/taxa_feed.xlsx")
+
+# intes at level of intes
+taxa.intes_intestine <- filter(taxa_tab.intes1, sample == "intestine")
+openxlsx::write.xlsx(taxa.intes_intestine, file = "tables/taxa.intes_intestine.xlsx")
+
+# water at level of water
+taxa.water_water <- filter(taxa_tab.water1, sample == "water")
+openxlsx::write.xlsx(taxa.water_water, file = "tables/taxa.water_water.xlsx")
+
+# feed at level of feed
+taxa.feed_feed <- filter(taxa_tab.feed1, sample == "feed")
+openxlsx::write.xlsx(taxa.feed_feed, file = "tables/taxa.feed_feed.xlsx")
+
+```
+
+```{r}
+sessionInfo()
+```
+

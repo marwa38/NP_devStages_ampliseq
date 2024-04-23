@@ -1,0 +1,887 @@
+---
+title: "ASV QA_QC and number of taxa"
+author: "Marwa Tawfik"
+summary: "Microbiome_dada2_pipeline_NPdevstages"
+Platform: "R version 4.1.0 (2021-05-18) -- Camp Pontanezen; x86_64-conda-linux-gnu (64-bit)"
+date: "22 October 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# ASV QA_QC;
+# load libraries ----
+library("tidyverse")
+library("vegan")
+library("ggplot2")
+library("phyloseq")
+library("microbiome")
+library("data.table")
+```
+
+```{r}
+#### ASV QA/QC ----
+# ASV QA_QC; Number of reads per sample, Taxa cleaning & Taxa prevalence
+# 14.1 Number of reads per sample ----
+summary(sample_sums(ps.1)) # read per sample statistics #saved in codes notes
+
+# make a data frame (table) with number of reads per sample
+sample_sum_df <- data.frame(sum = sample_sums(ps.1))
+sample_sum_df
+
+write.table(sample_sum_df, file = "tables/sample_sum_df.txt", sep = "\t")
+# Merge the metadata with the summed data, making a new data frame (all on one line)
+ss.df <- merge(sample_sum_df, as.data.frame(sample_data(ps.1)), by = "row.names") 
+ss.df
+
+write.table(ss.df, file = "tables/ss.df.txt", sep = "\t")
+```
+
+```{r}
+# incase of better visualisation using ps without positive and negative 
+
+# subset samples from ps.1 (without positive or negative)
+ps.1.intesWtrFeed <- subset_samples(ps.1, sample == "intestine" |
+                                      sample == "water" |
+                                    sample == "feed")
+ps.1.intesWtrFeed
+
+sample_sum_df.intesWtrFeed <- data.frame(sum = sample_sums(ps.1.intesWtrFeed))
+# Merge the metadata with the summed data, making a new data frame (all on one line)
+ss.df.intesWtrFeed <- merge(sample_sum_df.intesWtrFeed, as.data.frame(sample_data(ps.1.intesWtrFeed)), by="row.names") 
+write.table(sample_sum_df.intesWtrFeed, file = "tables/sample_sum_df.intesWtrFeed.txt", sep = "\t")
+write.table(ss.df.intesWtrFeed, file = "tables/ss.df.intesWtrFeed.txt", sep = "\t")
+```
+
+```{r}
+# Plot histogram of sample read depth for ps.1.intesWtrFeed
+ggplot(ss.df.intesWtrFeed, aes(x = sum)) + 
+  geom_histogram(color = "black", binwidth = 150) +
+  ggtitle("Distribution of sample sequencing depth") + 
+  xlab("Read counts") +
+  ylab("# of Samples") +
+  scale_x_continuous() +
+  facet_wrap(~Sample_Regime)
+ggsave("figures/sampleReadDepth.ps.1.intesWtrFeed.tiff", height = 5, width = 10)
+```
+
+```{r}
+# intestine only 
+ps.1.intes <- subset_samples(ps.1, sample == "intestine")
+ps.1.intes
+sample_sum_df.intes <- data.frame(sum = sample_sums(ps.1.intes))
+ss.df.intes <- merge(sample_sum_df.intes, as.data.frame(sample_data(ps.1.intes)), by="row.names")
+ggplot(ss.df.intes, aes(x = sum)) + 
+  geom_histogram(color = "black", binwidth = 150) +
+  ggtitle("Distribution of intestinal sample sequencing depth") + 
+  xlab("Read counts") +
+  ylab("# of Samples") +
+  theme(axis.text.x = element_text(size = 10, angle = 90)) 
+ggsave("figures/sampleReadDepth.ps.1.intes.tiff", height = 5, width = 10)
+```
+
+```{r}
+# water only 
+ps.1.wtr <- subset_samples(ps.1, sample == "water")
+ps.1.wtr
+sample_sum_df.wtr <- data.frame(sum = sample_sums(ps.1.wtr))
+ss.df.wtr <- merge(sample_sum_df.wtr, as.data.frame(sample_data(ps.1.wtr)), by="row.names") 
+ggplot(ss.df.wtr, aes(x = sum)) + 
+  geom_histogram(color = "black", binwidth = 150) +
+  ggtitle("Distribution of water sample sequencing depth") + 
+  xlab("Read counts") +
+  ylab("# of Samples") 
+ggsave("figures/sampleReadDepth.ps.1.wtr.tiff", height = 5, width = 5)
+```
+
+```{r}
+# feed only 
+ps.1.feed <- subset_samples(ps.1, sample == "feed")
+ps.1.feed
+sample_sum_df.feed <- data.frame(sum = sample_sums(ps.1.feed))
+ss.df.feed <- merge(sample_sum_df.feed, as.data.frame(sample_data(ps.1.feed)), by="row.names")
+ggplot(ss.df.feed, aes(x = sum)) + 
+  geom_histogram(color = "black", binwidth = 150) +
+  ggtitle("Distribution of feed sample sequencing depth") + 
+  xlab("Read counts") +
+  ylab("# of Samples")  
+ggsave("figures/sampleReadDepth.ps.1.feed.tiff", height = 5, width = 5)
+
+subset(ss.df, sum<1000) # Samples with less than 1000 reads #work with this
+write.table(subset(ss.df, sum<1000), "tables/susbetSumless1000.txt", sep = "/t")
+```
+
+```{r}
+# Visualise how many samples we'd lose
+ggplot(ss.df, aes_string(x="sample_regime", y = "sum", color = "sample")) + 
+  geom_boxplot() +
+  geom_jitter(size = 2, alpha = 0.6) +
+  scale_y_log10() +
+  geom_hline(yintercept = 1000, lty = 2) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  geom_text(aes_string(label = "Row.names"), size = 3, nudge_y = 0.05, nudge_x = 0.05)  # can be removed if the sample names is not needed
+ggsave("figures/sampleswillloseless1000.tiff", height = 5, width = 15)  
+```
+
+```{r}
+# Remove these outlier samples, creating a new PhyloSeq object
+# remove negatives and positives + samples with sum read < 1000
+ps.2 <- ps.1 %>% subset_samples(sample.no != "92" & # negative
+                                  sample.no != "211" & # negative
+                                  sample.no != "176" & # negative
+                                  sample.no != "128" & # MMV-T9-Rep6
+                                  sample.no != "116" & # V-T12-Rep6
+                                  sample.no != "150" & # VMV-T8-Rep5
+                                  sample.no != "227" & # positive
+                                  sample.no != "91" ) # positive
+ps.1
+ps.2
+identical(ps.2, ps.1) #FALSE which making sure that changed have been made to ps.1 and saved as ps.2
+```
+
+```{r}
+# sanity checks
+ps.1@sam_data # see samples before
+ps.2@sam_data # see samples after
+
+# or use dim() to a similar check 
+dim(ps.1@sam_data)
+dim(ps.2@sam_data)
+```
+
+```{r}
+ 
+# save before get rid of taxa 
+saveRDS(ps.2, "phyobjects/ps.2.rds")
+# only keep taxa after removing negative and positive by keeping taxa sum of at least 1
+ps.2.taxa <- prune_taxa(taxa_sums(ps.2) > 0, ps.2)
+ps.2.taxa
+```
+
+```{r}
+#13.2 Taxa/taxon cleaning (# Get rid of taxa) ----
+
+#show available ranks in the dataset 
+rank_names(ps.2.taxa)
+
+#CREATE TABLE, number of features for each phyla #before (=ps.2.taxa)
+table(tax_table(ps.2.taxa) [, "Phylum"], exclude = NULL)
+write.table(table(tax_table(ps.2.taxa) [, "Phylum"], exclude = NULL), file = "tables/ps.2.taxa.phylumFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Kingdom 
+table(tax_table(ps.2.taxa) [, "Kingdom"], exclude = NULL)
+write.table(table(tax_table(ps.2.taxa) [, "Kingdom"], exclude = NULL), file = "tables/ps.2.taxa.KingdomFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Class 
+table(tax_table(ps.2.taxa) [, "Class"], exclude = NULL)
+write.table(table(tax_table(ps.2.taxa) [, "Class"], exclude = NULL), file = "tables/ps.2.taxa.ClassFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Order 
+table(tax_table(ps.2.taxa) [, "Order"], exclude = NULL)
+write.table(table(tax_table(ps.2.taxa) [, "Order"], exclude = NULL), file = "tables/ps.2.taxa.OrderFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Family 
+table(tax_table(ps.2.taxa) [, "Family"], exclude = NULL)
+write.table(table(tax_table(ps.2.taxa) [, "Family"], exclude = NULL), file = "tables/ps.2.taxa.FamilyFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Genus 
+table(tax_table(ps.2.taxa) [, "Genus"], exclude = NULL)
+write.table(table(tax_table(ps.2.taxa) [, "Genus"], exclude = NULL), file = "tables/ps.2.taxa.GenusFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Species 
+table(tax_table(ps.2.taxa) [, "Species"], exclude = NULL)
+write.table(table(tax_table(ps.2.taxa) [, "Species"], exclude = NULL), file = "tables/ps.2.taxa.SpeciesFeatures_taxtable.txt", sep = "\t")
+```
+
+```{r}
+# Cleaning step 
+ps.2.taxa # taxa before
+saveRDS(ps.2.taxa, "phyobjects/ps.2.taxa.rds")
+
+ps.3 <- ps.2.taxa %>% 
+  subset_taxa(
+    Kingdom == "Bacteria" &
+      Family != "Mitochondria" &
+      Class != "Cyanobacteriia" &
+      Phylum != "Cyanobacteria"
+  )
+ps.3 #taxa after
+
+saveRDS(ps.3, "phyobjects/ps.3.rds")
+```
+
+```{r}
+# table of features  ----
+#CREATE TABLE, number of features for each phyla #after
+table(tax_table(ps.3) [, "Phylum"], exclude = NULL)
+write.table(table(tax_table(ps.3) [, "Phylum"], exclude = NULL), file = "tables/ps.3.phylumFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Kingdom 
+table(tax_table(ps.3) [, "Kingdom"], exclude = NULL)
+write.table(table(tax_table(ps.3) [, "Kingdom"], exclude = NULL), file = "tables/ps.3.KingdomFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Class 
+table(tax_table(ps.3) [, "Class"], exclude = NULL)
+write.table(table(tax_table(ps.3) [, "Class"], exclude = NULL), file = "tables/ps.3.ClassFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Order 
+table(tax_table(ps.3) [, "Order"], exclude = NULL)
+write.table(table(tax_table(ps.3) [, "Order"], exclude = NULL), file = "tables/ps.3.OrderFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Family 
+table(tax_table(ps.3) [, "Family"], exclude = NULL)
+write.table(table(tax_table(ps.3) [, "Family"], exclude = NULL), file = "tables/ps.3.FamilyFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Genus 
+table(tax_table(ps.3) [, "Genus"], exclude = NULL)
+write.table(table(tax_table(ps.3) [, "Genus"], exclude = NULL), file = "tables/ps.3.GenusFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Species 
+table(tax_table(ps.3) [, "Species"], exclude = NULL)
+write.table(table(tax_table(ps.3) [, "Species"], exclude = NULL), file = "tables/ps.3.SpeciesFeatures_taxtable.txt", sep = "\t")
+```
+
+```{r}
+# this step won't remove the NA but will inlcude the names whenever there is no NAs (don't go for it bec will be done in ps.prev)
+# Genus and Species is not NA
+no.na <- !is.na(tax_table(ps.3)[,"Genus"]) & !is.na(tax_table(ps.3)[,"Species"])
+# saveRDS(no.na, "phyloseq/ps.3.no.na.rds")
+
+# Replace Species with full name
+tax_table(ps.3)[no.na][,"Species"] <- paste(tax_table(ps.3)[no.na][,"Genus"], tax_table(ps.3)[no.na][,"Species"])
+```
+
+```{r}
+# sanity check 
+dim(tax_table(ps.3)[no.na][,"Species"])
+dim(tax_table(ps.3)[no.na][,"Kingdom"])
+dim(tax_table(ps.3)[,"Kingdom"])
+dim(tax_table(ps.3) [, "Species"])
+[1] 482   1
+[1] 482   1
+[1] 4990    1
+[1] 4990    1
+```
+
+```{r}
+ps.3 # taxa after
+saveRDS(ps.3, "phyobjects/ps.3.f.rds")
+```
+
+```{r}
+# table of features  ----
+#CREATE TABLE, number of features for each phyla #after
+table(tax_table(ps.3)[no.na][, "Phylum"], exclude = NULL)
+write.table(table(tax_table(ps.3)[no.na][, "Phylum"], exclude = NULL), file = "tables/ps.3[no.na].phylumFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Kingdom 
+table(tax_table(ps.3)[no.na][, "Kingdom"], exclude = NULL)
+write.table(table(tax_table(ps.3)[no.na][, "Kingdom"], exclude = NULL), file = "tables/ps.3[no.na].KingdomFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Class 
+table(tax_table(ps.3)[no.na][, "Class"], exclude = NULL)
+write.table(table(tax_table(ps.3)[no.na][, "Class"], exclude = NULL), file = "tables/ps.3[no.na].ClassFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Order 
+table(tax_table(ps.3)[no.na][, "Order"], exclude = NULL)
+write.table(table(tax_table(ps.3)[no.na][, "Order"], exclude = NULL), file = "tables/ps.3[no.na].OrderFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Family 
+table(tax_table(ps.3)[no.na][, "Family"], exclude = NULL)
+write.table(table(tax_table(ps.3)[no.na][, "Family"], exclude = NULL), file = "tables/ps.3[no.na].FamilyFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Genus 
+table(tax_table(ps.3)[no.na][, "Genus"], exclude = NULL)
+write.table(table(tax_table(ps.3)[no.na][, "Genus"], exclude = NULL), file = "tables/ps.3[no.na].GenusFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Species 
+table(tax_table(ps.3)[no.na][, "Species"], exclude = NULL)
+write.table(table(tax_table(ps.3)[no.na][, "Species"], exclude = NULL), file = "tables/ps.3[no.na].SpeciesFeatures_taxtable.txt", sep = "\t")
+```
+
+```{r}
+#14.3 Taxa prevalence (wNA) ----
+# plot the prevalence of each of the ASVs across the different taxa 
+# first create an object called prevdf
+prevdf <-
+  apply(
+    X = otu_table(ps.3),
+    MARGIN = ifelse(taxa_are_rows(ps.3), yes = 1, no = 2),
+    FUN = function(x) {
+      sum(x > 0)
+    }
+  )
+
+# then create a dataframe of ASVs (taxa_table), sum of ASVs and prevalence
+prevdf <- data.frame(Prevalence = prevdf, TotalAbundance = taxa_sums(ps.3), tax_table(ps.3))
+```
+
+```{r}
+# The plot, dotted line at 5% of samples
+ggplot(prevdf, aes(TotalAbundance, Prevalence/nsamples(ps.3), color = Family)) +
+  geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2) +
+  geom_point(size = 3, alpha = 0.7) +
+  scale_x_log10() +
+  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
+  facet_wrap(~Phylum) +
+  theme(legend.position = "none") +
+  ggtitle("Phylum Prevalence, Coloured by Family")
+
+ggsave("figures/intestineWtrFeed_phylPrevalence_ps.3.tiff", height = 7, width = 15)
+```
+
+```{r}
+# Are there phyla that are comprised of mostly low-prevalence features?
+# compute the total (2) and average (1) prevalences of the features (ASVs) in each phylum 
+plyr::ddply(prevdf, "Phylum", function(df1) {cbind(mean(df1$Prevalence), sum(df1$Prevalence))})
+#                  Phylum        1    2
+# 1       Acidobacteriota 4.200000  168
+# 2      Actinobacteriota 2.796651 1169
+# 3        Armatimonadota 6.263158  119
+# 4          Bacteroidota 3.244019 2034
+# 5      Bdellovibrionota 2.688312  207
+# 6      Campilobacterota 2.363636   52
+# 7           Chloroflexi 2.955556  133
+# 8  Coprothermobacterota 1.000000    1 *
+# 9          Deinococcota 2.142857   30
+# 10         Dependentiae 2.000000   24
+# 11     Desulfobacterota 1.333333    4
+# 12      Elusimicrobiota 1.000000    1 *
+# 13       Fibrobacterota 1.500000    9
+# 14           Firmicutes 3.783983 3591
+# 15       Fusobacteriota 2.913043  134
+# 16      Gemmatimonadota 5.677419  176
+# 17      Hydrogenedentes 1.333333    4
+# 18          Myxococcota 3.243590  253
+# 19         Nitrospirota 5.900000   59
+# 20      Patescibacteria 2.422222  218
+# 21      Planctomycetota 3.184211  605
+# 22       Proteobacteria 3.968116 8214
+# 23        Spirochaetota 2.800000   56
+# 24         Synergistota 1.714286   12
+# 25         Thermotogota 1.400000    7
+# 26    Verrucomicrobiota 3.336683  664
+# will remove the one denoted with * Coprothermobacterota, Elusimicrobiota as they considered singeltons produced after dada2 that Catalan adviced to remove
+# if number in column 2 is higher than in 1 --> no need to remove certain taxa (2 in case of doubeltons, 3 of tripeltons)
+# some people also dont' remove the singeltons as dada2 is known for being stringent with removing singletons earlier (denoising step)
+# (if not remove manually or by doing the following)
+```
+
+```{r}
+# Filtering ----
+#The other method (go for it)
+filterPhyla <- c("Elusimicrobiota", "Coprothermobacterota")
+ps.prev <- subset_taxa(ps.3, !Phylum %in% filterPhyla)
+ps.prev
+# phyloseq-class experiment-level object
+# otu_table()   OTU Table:         [ 4981 taxa and 129 samples ]
+# sample_data() Sample Data:       [ 129 samples by 11 sample variables ]
+# tax_table()   Taxonomy Table:    [ 4981 taxa by 7 taxonomic ranks ]
+# phy_tree()    Phylogenetic Tree: [ 4981 tips and 4979 internal nodes ]
+# refseq()      DNAStringSet:      [ 4981 reference sequences ]
+
+# save phyloseq after all cleaning and flitering 
+saveRDS(ps.prev, "phyobjects/ps.prev.rds")
+
+# for metabolic downstream analysis 
+# will do filtering on the ps.3 which its species column don't have genus along with species (i.e. have only species names)
+# ps.3a <- readRDS("phyobjects/ps.3.rds") # from a previous step (copy ps.3.rds into this folder to work on it)
+# filterPhyla <- c("Elusimicrobiota", "Coprothermobacterota")
+# ps.prev.met <- subset_taxa(ps.3a, !Phylum %in% filterPhyla)
+# saveRDS(ps.prev.met, "phyobjects/ps.prev.metabolic.rds")
+```
+
+```{r}
+# table of features (ps.prev) ----
+#CREATE TABLE, number of features for each phyla #before
+table(tax_table(ps.prev) [, "Phylum"], exclude = NULL)
+write.table(table(tax_table(ps.prev)[, "Phylum"], exclude = NULL), file = "tables/ps.prev.phylumFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Kingdom 
+table(tax_table(ps.prev) [, "Kingdom"], exclude = NULL)
+write.table(table(tax_table(ps.prev)[, "Kingdom"], exclude = NULL), file = "tables/ps.prev.KingdomFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Class 
+table(tax_table(ps.prev) [, "Class"], exclude = NULL)
+write.table(table(tax_table(ps.prev)[, "Class"], exclude = NULL), file = "tables/ps.prev.ClassFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Order 
+table(tax_table(ps.prev) [, "Order"], exclude = NULL)
+write.table(table(tax_table(ps.prev)[, "Order"], exclude = NULL), file = "tables/ps.prev.OrderFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Family 
+table(tax_table(ps.prev) [, "Family"], exclude = NULL)
+write.table(table(tax_table(ps.prev)[, "Family"], exclude = NULL), file = "tables/ps.prev.FamilyFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Genus 
+table(tax_table(ps.prev) [, "Genus"], exclude = NULL)
+write.table(table(tax_table(ps.prev)[, "Genus"], exclude = NULL), file = "tables/ps.prev.GenusFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Species 
+table(tax_table(ps.prev) [, "Species"], exclude = NULL)
+write.table(table(tax_table(ps.prev)[, "Species"], exclude = NULL), file = "tables/ps.prev.SpeciesFeatures_taxtable.txt", sep = "\t")
+
+identical(table(tax_table(ps.prev)[, "Species"], exclude = NULL), table(tax_table(ps.prev)[, "Species"]))#FALSE
+```
+
+```{r}
+# Genus and Species is not NA
+# Replace Species with full name
+# 2 steps where carried out previously that won't run again to not make double the genus name 
+no.na <- !is.na(tax_table(ps.prev)[,"Genus"]) & !is.na(tax_table(ps.prev)[,"Species"])
+#saveRDS(no.na, "phyobjects/ps.prev.no.na.rds")
+
+tax_table(ps.prev)[no.na][,"Species"]
+head(tax_table(ps.prev)[no.na][,"Species"])
+```
+
+```{r}
+# sanity check to make sure that the species have been written in a correct way (in case needed)
+ps.prev@tax_table #before and after running no.na
+
+ps.1@tax_table
+ps.2.taxa@tax_table
+ps.3@tax_table
+```
+
+```{r}
+# table of features (ps.prev) ----
+#CREATE TABLE, number of features for each phyla #before
+table(tax_table(ps.prev)[no.na][, "Phylum"], exclude = NULL)
+write.table(table(tax_table(ps.prev)[no.na][, "Phylum"], exclude = NULL), file = "tables/ps.prev[no.na].phylumFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Kingdom 
+table(tax_table(ps.prev)[no.na][, "Kingdom"], exclude = NULL)
+write.table(table(tax_table(ps.prev)[no.na][, "Kingdom"], exclude = NULL), file = "tables/ps.prev[no.na].KingdomFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Class 
+table(tax_table(ps.prev)[no.na][, "Class"], exclude = NULL)
+write.table(table(tax_table(ps.prev)[no.na][, "Class"], exclude = NULL), file = "tables/ps.prev[no.na].ClassFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Order 
+table(tax_table(ps.prev)[no.na][, "Order"], exclude = NULL)
+write.table(table(tax_table(ps.prev)[no.na][, "Order"], exclude = NULL), file = "tables/ps.prev[no.na].OrderFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Family 
+table(tax_table(ps.prev)[no.na][, "Family"], exclude = NULL)
+write.table(table(tax_table(ps.prev)[no.na][, "Family"], exclude = NULL), file = "tables/ps.prev[no.na].FamilyFeatures_taxtable.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Genus 
+table(tax_table(ps.prev)[no.na][, "Genus"], exclude = NULL)
+write.table(table(tax_table(ps.prev)[no.na][, "Genus"], exclude = NULL), file = "tables/ps.prev[no.na].GenusFeatures_taxtable.txt", sep = "\t")
+write.table(table(tax_table(ps.prev)[no.na][, "Genus"]), file = "tables/ps.prev[no.na].GenusFeatures_taxtable1.txt", sep = "\t")
+
+#CREATE TABLE, number of features for each Species 
+table(tax_table(ps.prev)[no.na][, "Species"], exclude = NULL)
+write.table(table(tax_table(ps.prev)[no.na][, "Species"], exclude = NULL), file = "tables/ps.prev[no.na].SpeciesFeatures_taxtable.txt", sep = "\t")
+write.table(table(tax_table(ps.prev)[no.na][, "Species"]), file = "tables/ps.prev[no.na].SpeciesFeatures_taxtable1.txt", sep = "\t")
+```
+
+```{r}
+# sanity checks ----
+dim(tax_table(ps.prev)[no.na][,"Kingdom"])
+dim(tax_table(ps.prev)[no.na][,"Species"])
+dim(tax_table(ps.prev)[,"Kingdom"])
+dim(tax_table(ps.prev)[, "Species"])
+# [1] 482   1
+# [1] 482   1
+# [1] 4988    1
+# [1] 4988    1
+   
+```
+
+```{r}
+# sanity checks 
+summary(sample_sums(ps.prev)) # read per sample statistics
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 641    3501   20303   52991   68314  321509
+sample_sum_df.ps.prev <- data.frame(sum = sample_sums(ps.prev))
+head(sample_sum_df.ps.prev)
+
+write.table(sample_sum_df.ps.prev, file = "tables/sample_sum_df.ps.prev.txt", sep = "\t")
+
+ss.ps.prev.df <- merge(sample_sum_df.ps.prev, as.data.frame(sample_data(ps.prev)), by="row.names") # Merge the metadata with the summed data, making a new data frame (all on one line)
+head(ss.ps.prev.df)
+
+write.table(ss.ps.prev.df, file = "tables/ss.ps.prev.df.txt", sep = "\t")
+```
+
+```{r}
+# easy way to to check number of samples for each group
+table(meta(ps.prev)$Sample_Regime, useNA = "always")
+  #      feed.M        feed.V   intestine.M  intestine.MM intestine.MMV   intestine.V  intestine.VM intestine.VMV       water.M 
+  #           3             3            18            18            17            17            18            17             3 
+  #    water.MM     water.MMV       water.V      water.VM     water.VMV          <NA> 
+  #           3             2             3             3             4             0 
+```
+
+
+
+```{r}
+# ordering ----
+# chaning to factors first 
+
+lapply(sample_data(ps.prev), class)
+lapply(sample_data(ps.prev), levels)
+# change characters to factors
+sample_data(ps.prev)$sample <- as.factor(sample_data(ps.prev)$sample)
+sample_data(ps.prev)$Phase <- as.factor(sample_data(ps.prev)$Phase)
+sample_data(ps.prev)$Region <- as.factor(sample_data(ps.prev)$Region)
+sample_data(ps.prev)$Regime <- as.factor(sample_data(ps.prev)$Regime)
+sample_data(ps.prev)$Sample_Regime <- as.factor(sample_data(ps.prev)$Sample_Regime)
+sample_data(ps.prev)$Sample_Type <- as.factor(sample_data(ps.prev)$Sample_Type)
+# rerun again 
+lapply(sample_data(ps.prev), class)
+```
+
+```{r}
+# ordering itself 
+# sample
+lapply(sample_data(ps.prev)$sample, levels) #example: [[35]] [1] "feed" "intestine" "water"
+#if not arranged arrange as follow
+sample_data(ps.prev)$sample <-
+  factor(sample_data(ps.prev)$sample, levels = c("intestine",
+                                                "feed",
+                                                "water"))
+lapply(sample_data(ps.prev)$sample, levels)
+sample_data(ps.prev)$sample #sanity check 
+```
+
+```{r}
+# Phase
+lapply(sample_data(ps.prev)$Phase, levels) #example: [[35]] [1] "challenge"    "feed"         "intermediate" "stimulus"
+#if not arranged arrange as follow
+sample_data(ps.prev)$Phase <-
+  factor(sample_data(ps.prev)$Phase, levels = c("stimulus",
+                                                "intermediate",
+                                                "challenge",
+                                                "feed"))
+lapply(sample_data(ps.prev)$Phase, levels)
+sample_data(ps.prev)$Phase #sanity check 
+```
+
+```{r}
+# Region
+lapply(sample_data(ps.prev)$Region, levels) #example: [[35]] [1] "distal" "feed"   "water"  "whole"
+#if not arranged arrange as follow
+sample_data(ps.prev)$Region <-
+  factor(sample_data(ps.prev)$Region, levels = c("whole", "distal",
+                                                     "feed", "water"))
+lapply(sample_data(ps.prev)$Region, levels)
+sample_data(ps.prev)$Region #sanity check 
+```
+
+```{r}
+# Regime
+lapply(sample_data(ps.prev)$Regime, levels) #example: [[35]] "M"   "MM"  "MMV" "V"   "VM"  "VMV"
+#if not arranged arrange as follow
+sample_data(ps.prev)$Regime <-
+  factor(sample_data(ps.prev)$Regime, levels = c("M", "V",
+                                                     "MM", "VM",
+                                                     "MMV", "VMV"))
+lapply(sample_data(ps.prev)$Regime, levels)
+sample_data(ps.prev)$Regime #sanity check 
+```
+
+```{r}
+# Sample_Regime
+lapply(sample_data(ps.prev)$Sample_Regime, levels) 
+#example: [[35]] 
+# [1] "feed.M"        "feed.V"        "intestine.M"   "intestine.MM"  "intestine.MMV" "intestine.V"   "intestine.VM"  "intestine.VMV" "water.M"      
+# [10] "water.MM"      "water.MMV"     "water.V"       "water.VM"      "water.VMV"
+sample_data(ps.prev)$Sample_Regime <-
+  factor(sample_data(ps.prev)$Sample_Regime, levels = c("intestine.M", "intestine.V",
+                                                        "intestine.MM", "intestine.VM", 
+                                                        "intestine.MMV", "intestine.VMV", 
+                                                        "feed.M", "feed.V", 
+                                                        "water.M", "water.V", 
+                                                        "water.MM", "water.VM", 
+                                                        "water.MMV", "water.VMV"))
+lapply(sample_data(ps.prev)$Sample_Regime, levels)
+sample_data(ps.prev)$Sample_Regime
+```
+
+```{r}
+# Sample_Type
+lapply(sample_data(ps.prev)$Sample_Type, levels) #example: [[35]] [1] "distal" "feed"   "water"  "whole"
+#if not arranged arrange as follow
+sample_data(ps.prev)$Sample_Type <-
+  factor(sample_data(ps.prev)$Sample_Type, levels = c("intestine.M", "intestine.V",
+                                                        "intestine.MM", "intestine.VM", 
+                                                        "intestine.MMV", "intestine.VMV", 
+                                                        "feed", 
+                                                        "water"))
+lapply(sample_data(ps.prev)$Sample_Type, levels)
+sample_data(ps.prev)$Sample_Type #sanity check 
+```
+
+```{r}
+# sample.name.1
+lapply(sample_data(ps.prev)$sample.name.1, levels) #example: [[35]] [1] "distal" "feed"   "water"  "whole"
+#if not arranged arrange as follow
+sample_data(ps.prev)$sample.name.1 <-
+  factor(sample_data(ps.prev)$sample.name.1, levels = c("M", "V",
+                                                        "MM", "VM", 
+                                                        "MMV", "VMV", 
+                                                        "feed.M", "feed.V", 
+                                                        "water.M", "water.V",
+                                                        "water.MM", "water.VM", 
+                                                        "water.MMV", "water.VMV"))
+lapply(sample_data(ps.prev)$sample.name.1, levels)
+sample_data(ps.prev)$sample.name.1 #sanity check 
+```
+
+```{r}
+# save phyloseq after all cleaning and flitering 
+saveRDS(ps.prev, "phyobjects/ps.prev.f.rds")
+```
+
+```{r}
+# ps.prev <- readRDS("phyobjects/ps.prev.f3.rds")
+
+# number of samples for downstream analysis 
+ggplot(sample_data(ps.prev), aes(x = Sample_Regime, fill = sample, group = sample)) + 
+  theme_bw() +
+  geom_bar() + 
+  theme(axis.text.x = element_text(size = 10, angle = 90)) +
+  #scale_x_discrete(limits = levels(meta$sample.name)) +
+  scale_y_continuous(limits = c(0, 18), breaks = seq(0, 18, by = 2)) +
+  labs(y = "# of Samples") +
+  scale_fill_manual(values = c("#FFCC99", "lightgreen", "lightblue"))
+  
+
+ggsave("figures/sample_regime.number.ps.prev.tiff", height = 5, width = 5)
+```
+
+
+```{r}
+# Continuation on no. of reads and no. of taxa after having the final phyloseq object 
+# no of reads taxonomicallly classified ----
+# number of taxa / ASVs ----
+# subsets 
+ps.prev
+# phyloseq-class experiment-level object
+# otu_table()   OTU Table:         [ 4988 taxa and 129 samples ]
+# sample_data() Sample Data:       [ 129 samples by 12 sample variables ]
+# tax_table()   Taxonomy Table:    [ 4988 taxa by 7 taxonomic ranks ]
+
+
+ps.prev.intes <- subset_samples(ps.prev, sample == "intestine")
+ps.prev.intes <- prune_taxa(taxa_sums(ps.prev.intes) > 0, ps.prev.intes)
+ps.prev.intes
+str(sample_data(ps.prev.intes)) # sanity check
+# phyloseq-class experiment-level object
+# otu_table()   OTU Table:         [ 2150 taxa and 105 samples ]
+# sample_data() Sample Data:       [ 105 samples by 12 sample variables ]
+# tax_table()   Taxonomy Table:    [ 2150 taxa by 7 taxonomic ranks ]
+```
+
+
+```{r}
+ps.prev.stim <- subset_samples(ps.prev, sample == "intestine" & Phase == "stimulus")
+ps.prev.stim <- prune_taxa(taxa_sums(ps.prev.stim) > 0, ps.prev.stim)
+ps.prev.stim
+str(sample_data(ps.prev.stim)) # sanity check
+# phyloseq-class experiment-level object
+# otu_table()   OTU Table:         [ 1154 taxa and 35 samples ]
+# sample_data() Sample Data:       [ 35 samples by 12 sample variables ]
+# tax_table()   Taxonomy Table:    [ 1154 taxa by 7 taxonomic ranks ]
+```
+
+
+```{r}
+ps.prev.interm <- subset_samples(ps.prev, sample == "intestine" & Phase == "intermediate")
+ps.prev.interm <- prune_taxa(taxa_sums(ps.prev.interm) > 0, ps.prev.interm)
+ps.prev.interm
+str(sample_data(ps.prev.interm)) # sanity check
+# phyloseq-class experiment-level object
+# otu_table()   OTU Table:         [ 771 taxa and 36 samples ]
+# sample_data() Sample Data:       [ 36 samples by 12 sample variables ]
+# tax_table()   Taxonomy Table:    [ 771 taxa by 7 taxonomic ranks ]
+```
+
+
+```{r}
+ps.prev.chall <- subset_samples(ps.prev, Sample_Regime == "intestine.MMV" | Sample_Regime == "intestine.VMV")
+ps.prev.chall <- prune_taxa(taxa_sums(ps.prev.chall) > 0, ps.prev.chall)
+ps.prev.chall
+str(sample_data(ps.prev.chall)) # sanity check
+# phyloseq-class experiment-level object
+# otu_table()   OTU Table:         [ 640 taxa and 34 samples ]
+# sample_data() Sample Data:       [ 34 samples by 12 sample variables ]
+# tax_table()   Taxonomy Table:    [ 640 taxa by 7 taxonomic ranks ]
+```
+
+
+```{r}
+ps.prev.water <- subset_samples(ps.prev, sample == "water")
+ps.prev.water <- prune_taxa(taxa_sums(ps.prev.water) > 0, ps.prev.water)
+ps.prev.water
+str(sample_data(ps.prev.water)) # sanity check
+# phyloseq-class experiment-level object
+# otu_table()   OTU Table:         [ 2474 taxa and 18 samples ]
+# sample_data() Sample Data:       [ 18 samples by 12 sample variables ]
+# tax_table()   Taxonomy Table:    [ 2474 taxa by 7 taxonomic ranks ]
+```
+
+
+```{r}
+ps.prev.wtrStim <- subset_samples(ps.prev, Sample_Regime == "water.M" | Sample_Regime == "water.V")
+ps.prev.wtrStim <- prune_taxa(taxa_sums(ps.prev.wtrStim) > 0, ps.prev.wtrStim)
+ps.prev.wtrStim
+str(sample_data(ps.prev.wtrStim)) # sanity check
+# phyloseq-class experiment-level object
+# otu_table()   OTU Table:         [ 1047 taxa and 6 samples ]
+# sample_data() Sample Data:       [ 6 samples by 12 sample variables ]
+# tax_table()   Taxonomy Table:    [ 1047 taxa by 7 taxonomic ranks ]
+
+```
+
+
+```{r}
+ps.prev.wtrInterm <- subset_samples(ps.prev, Sample_Regime == "water.MM" | Sample_Regime == "water.VM")
+ps.prev.wtrInterm <- prune_taxa(taxa_sums(ps.prev.wtrInterm) > 0, ps.prev.wtrInterm)
+ps.prev.wtrInterm
+str(sample_data(ps.prev.wtrInterm)) # sanity check
+# phyloseq-class experiment-level object
+# otu_table()   OTU Table:         [ 1476 taxa and 6 samples ]
+# sample_data() Sample Data:       [ 6 samples by 12 sample variables ]
+# tax_table()   Taxonomy Table:    [ 1476 taxa by 7 taxonomic ranks ]
+```
+
+
+```{r}
+ps.prev.wtrChall <- subset_samples(ps.prev, Sample_Regime == "water.MMV" | Sample_Regime == "water.VMV")
+ps.prev.wtrChall <- prune_taxa(taxa_sums(ps.prev.wtrChall) > 0, ps.prev.wtrChall)
+ps.prev.wtrChall
+str(sample_data(ps.prev.wtrChall)) # sanity check
+# phyloseq-class experiment-level object
+# otu_table()   OTU Table:         [ 1338 taxa and 6 samples ]
+# sample_data() Sample Data:       [ 6 samples by 12 sample variables ]
+# tax_table()   Taxonomy Table:    [ 1338 taxa by 7 taxonomic ranks ]
+```
+
+
+```{r}
+ps.prev.feed <- subset_samples(ps.prev, sample == "feed")
+ps.prev.feed <- prune_taxa(taxa_sums(ps.prev.feed) > 0, ps.prev.feed)
+ps.prev.feed
+str(sample_data(ps.prev.feed)) # sanity check
+# phyloseq-class experiment-level object
+# otu_table()   OTU Table:         [ 1119 taxa and 6 samples ]
+# sample_data() Sample Data:       [ 6 samples by 12 sample variables ]
+# tax_table()   Taxonomy Table:    [ 1119 taxa by 7 taxonomic ranks ]
+```
+
+```{r}
+# read per sample statistics ----
+summary(sample_sums(ps.prev))
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 641    3501   20303   52991   68314  321509 
+
+summary(sample_sums(ps.prev.intes)) 
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 641    3073    9394   49384   67956  321509
+ 
+summary(sample_sums(ps.prev.stim)) 
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 1064    2194    3619    5770    6435   19352
+ 
+summary(sample_sums(ps.prev.interm)) 
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 1406    9314   65133   91589  144210  321509
+ 
+summary(sample_sums(ps.prev.chall)) 
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 641    2471   21436   49593   68224  246441 
+ 
+summary(sample_sums(ps.prev.water)) 
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 19821   45366   48560   68508   73850  175326 
+ 
+summary(sample_sums(ps.prev.wtrStim)) 
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 19821   21866   45454   48392   73850   82302
+ 
+summary(sample_sums(ps.prev.wtrInterm)) 
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 45113   46654   48332   68609   50378  172723 
+ 
+summary(sample_sums(ps.prev.wtrChall)) 
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 33332   47834   51836   88522  142186  175326
+ 
+summary(sample_sums(ps.prev.feed))
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 37226   46328   58862   69567   67315  150172 
+```
+
+
+```{r}
+standard_error <- function(x) sd(x) / sqrt(length(x)) # Create own function
+
+x <- sample_sums(ps.prev)
+standard_error(x)
+# [1] 6003.511
+x <- sample_sums(ps.prev.intes)
+standard_error(x)
+# [1] 7000.994
+x <- sample_sums(ps.prev.stim)
+standard_error(x)
+# [1] 889.9332
+x <- sample_sums(ps.prev.interm)
+standard_error(x)
+# [1] 14272.45
+x <- sample_sums(ps.prev.chall)
+standard_error(x)
+# [1] 11443.1
+x <- sample_sums(ps.prev.water)
+standard_error(x)
+# [1] 11999.74
+x <- sample_sums(ps.prev.wtrStim)
+standard_error(x)
+# [1] 12090.52
+x <- sample_sums(ps.prev.wtrInterm)
+standard_error(x)
+# [1] 20839.63
+x <- sample_sums(ps.prev.wtrChall)
+standard_error(x)
+# [1] 26966.95
+x <- sample_sums(ps.prev.feed)
+standard_error(x)
+# [1] 16818
+
+```
+
+
+```{r}
+sum(sample_sums(ps.prev))
+# [1] 6835846
+sum(sample_sums(ps.prev.intes))
+# [1] 5185307
+sum(sample_sums(ps.prev.stim))
+# [1] 201936
+sum(sample_sums(ps.prev.interm))
+# [1] 3297201
+sum(sample_sums(ps.prev.chall))
+# [1] 1686170
+sum(sample_sums(ps.prev.water))
+# [1] 1233135
+sum(sample_sums(ps.prev.wtrStim))
+# [1] 290349
+sum(sample_sums(ps.prev.wtrInterm))
+# [1] 411654
+sum(sample_sums(ps.prev.wtrChall))
+# [1] 531132
+sum(sample_sums(ps.prev.feed))
+# [1] 417404
+```
+
+
+
+```{r}
+sessionInfo()
+```

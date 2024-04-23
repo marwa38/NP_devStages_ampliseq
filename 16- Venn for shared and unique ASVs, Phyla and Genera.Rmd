@@ -1,0 +1,1192 @@
+---
+title: "STEP 18. Venn Diagrams for shared & unique ASVs and phyla"
+author: "Marwa Tawfik"
+summary: "Microbiome_dada2_pipeline_NPdevstages"
+Platform: "R version 4.1.0 (2021-05-18) -- Camp Pontanezen; x86_64-conda-linux-gnu (64-bit)"
+date: "22 October 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+## venn diagram to show unique and shared ASVs ----
+# load libraries 
+library(MicEco)
+library(phyloseq)
+```
+
+```{r}
+ps.prev <- readRDS("phyobjects/STEP 14/ps.prev.f.rds")
+```
+
+```{r}
+sample_data(ps.prev)
+# subsets ----
+## intes, feed & water across phases 
+ps.stim.intesFeedWtr <- subset_samples(ps.prev, sample == "feed" |
+                                         Sample_Regime == "intestine.M" | Sample_Regime == "intestine.V" |
+                                         Sample_Regime == "water.M" | Sample_Regime == "water.V")
+ps.stim.intesFeedWtr <- prune_taxa(taxa_sums(ps.stim.intesFeedWtr) > 0, ps.stim.intesFeedWtr)
+#str(sample_data(ps.stim.intesFeedWtr))
+
+ps.interm.intesFeedWtr <- subset_samples(ps.prev, sample == "feed" |
+                                         Sample_Regime == "intestine.MM" | Sample_Regime == "intestine.VM" |
+                                         Sample_Regime == "water.MM" | Sample_Regime == "water.VM")
+ps.interm.intesFeedWtr <- prune_taxa(taxa_sums(ps.interm.intesFeedWtr) > 0, ps.interm.intesFeedWtr)
+#str(sample_data(ps.interm.intesFeedWtr))
+
+ps.chall.intesFeedWtr <- subset_samples(ps.prev, sample == "feed" |
+                                         Sample_Regime == "intestine.MMV" | Sample_Regime == "intestine.VMV" |
+                                         Sample_Regime == "water.MMV" | Sample_Regime == "water.VMV")
+ps.chall.intesFeedWtr <- prune_taxa(taxa_sums(ps.chall.intesFeedWtr) > 0, ps.chall.intesFeedWtr)
+#str(sample_data(ps.chall.intesFeedWtr))
+```
+
+
+```{r}
+## phyla only for each subset
+ps.stim.intesFeedWtr.phylum <- tax_glom(ps.stim.intesFeedWtr, taxrank = "Phylum")
+ps.interm.intesFeedWtr.phylum <- tax_glom(ps.interm.intesFeedWtr, taxrank = "Phylum")
+ps.chall.intesFeedWtr.phylum <- tax_glom(ps.chall.intesFeedWtr, taxrank = "Phylum")
+```
+
+```{r}
+# M.MM.MMV
+ps.M.MM.MMV <- subset_samples(ps.prev, sample == "feed" | 
+                                Sample_Regime == "intestine.M" | 
+                                Sample_Regime == "intestine.MM" | 
+                                Sample_Regime == "intestine.MMV" |
+                                Sample_Regime == "water.M" |
+                                Sample_Regime == "water.MM" |
+                                Sample_Regime == "water.MMV")
+ps.M.MM.MMV <- prune_taxa(taxa_sums(ps.M.MM.MMV) > 0, ps.M.MM.MMV)
+#str(sample_data(ps.M.MM.MMV))
+
+ps.M <- subset_samples(ps.prev, Sample_Regime == "feed.M" | 
+                                Sample_Regime == "intestine.M" | 
+                                Sample_Regime == "water.M")
+ps.M <- prune_taxa(taxa_sums(ps.M) > 0, ps.M)
+#str(sample_data(ps.M))
+
+ps.MM <- subset_samples(ps.prev, Sample_Regime == "feed.M" | 
+                          Sample_Regime == "intestine.MM" | 
+                          Sample_Regime == "water.MM")
+ps.MM <- prune_taxa(taxa_sums(ps.MM) > 0, ps.MM)
+#str(sample_data(ps.MM))
+
+ps.MMV <- subset_samples(ps.prev, Sample_Regime == "feed.V" |
+                           Sample_Regime == "intestine.MMV" |
+                           Sample_Regime == "water.MMV")
+ps.MMV <- prune_taxa(taxa_sums(ps.MMV) > 0, ps.MMV)
+#str(sample_data(ps.MMV))
+```
+
+
+```{r}
+## phyla only for each subset
+ps.M.MM.MMV.phylum <- tax_glom(ps.M.MM.MMV, taxrank = "Phylum")
+ps.M.phylum <- tax_glom(ps.M, taxrank = "Phylum")
+ps.MM.phylum <- tax_glom(ps.MM, taxrank = "Phylum")
+ps.MMV.phylum <- tax_glom(ps.MMV, taxrank = "Phylum")
+```
+
+
+```{r}
+# V.VM.VMV
+ps.V.VM.VMV <- subset_samples(ps.prev, sample == "feed" | 
+                                Sample_Regime == "intestine.V" | 
+                                Sample_Regime == "intestine.VM" | 
+                                Sample_Regime == "intestine.VMV" |
+                                Sample_Regime == "water.V" |
+                                Sample_Regime == "water.VM" |
+                                Sample_Regime == "water.VMV")
+ps.V.VM.VMV <- prune_taxa(taxa_sums(ps.V.VM.VMV) > 0, ps.V.VM.VMV)
+#str(sample_data(ps.V.VM.VMV))
+
+ps.V <- subset_samples(ps.prev, Sample_Regime == "feed.V" | 
+                                Sample_Regime == "intestine.V" | 
+                                Sample_Regime == "water.V")
+ps.V <- prune_taxa(taxa_sums(ps.V) > 0, ps.V)
+#str(sample_data(ps.V))
+
+ps.VM <- subset_samples(ps.prev, Sample_Regime == "feed.M" | 
+                          Sample_Regime == "intestine.VM" | 
+                          Sample_Regime == "water.VM")
+ps.VM <- prune_taxa(taxa_sums(ps.VM) > 0, ps.VM)
+#str(sample_data(ps.VM))
+
+ps.VMV <- subset_samples(ps.prev, Sample_Regime == "feed.V" |
+                           Sample_Regime == "intestine.VMV" |
+                           Sample_Regime == "water.VMV")
+ps.VMV <- prune_taxa(taxa_sums(ps.VMV) > 0, ps.VMV)
+#str(sample_data(ps.VMV))
+```
+
+
+```{r}
+# intestine M.MM.MMV
+ps.intes.M.MM.MMV <- subset_samples(ps.prev, Sample_Regime == "intestine.M" | 
+                                      Sample_Regime == "intestine.MM" | 
+                                      Sample_Regime == "intestine.MMV")
+ps.intes.M.MM.MMV <- prune_taxa(taxa_sums(ps.intes.M.MM.MMV) > 0, ps.intes.M.MM.MMV)
+# #str(sample_data(ps.intes.M.MM.MMV))
+
+# intestine V.VM.VMV
+ps.intes.V.VM.VMV <- subset_samples(ps.prev, Sample_Regime == "intestine.V" | 
+                                Sample_Regime == "intestine.VM" | 
+                                Sample_Regime == "intestine.VMV")
+ps.intes.V.VM.VMV <- prune_taxa(taxa_sums(ps.intes.V.VM.VMV) > 0, ps.intes.V.VM.VMV)
+# #str(sample_data(ps.intes.V.VM.VMV))
+```
+
+```{r}
+## phyla only for each subset
+ps.intes.M.MM.MMV.phylum <- tax_glom(ps.intes.M.MM.MMV, taxrank = "Phylum")
+ps.intes.V.VM.VMV.phylum <- tax_glom(ps.intes.V.VM.VMV, taxrank = "Phylum")
+```
+
+```{r}
+## phyla only for each subset
+ps.M.MM.MMV.phylum <- tax_glom(ps.M.MM.MMV, taxrank = "Phylum")
+ps.M.phylum <- tax_glom(ps.M, taxrank = "Phylum")
+ps.MM.phylum <- tax_glom(ps.MM, taxrank = "Phylum")
+ps.MMV.phylum <- tax_glom(ps.MMV, taxrank = "Phylum")
+```
+
+```{r}
+## phyla only for each subset
+ps.V.VM.VMV.phylum <- tax_glom(ps.V.VM.VMV, taxrank = "Phylum")
+ps.V.phylum <- tax_glom(ps.V, taxrank = "Phylum")
+ps.VM.phylum <- tax_glom(ps.VM, taxrank = "Phylum")
+ps.VMV.phylum <- tax_glom(ps.VMV, taxrank = "Phylum")
+```
+
+
+```{r}
+## water across phases 
+ps.water.phases <- subset_samples(ps.prev, sample == "water")
+ps.water.phases <- prune_taxa(taxa_sums(ps.water.phases) > 0, ps.water.phases)
+# #str(sample_data(ps.water.phases))
+```
+
+```{r}
+## intes across phases 
+ps.intes.phases <- subset_samples(ps.prev, sample == "intestine")
+ps.intes.phases <- prune_taxa(taxa_sums(ps.intes.phases) > 0, ps.intes.phases)
+#str(sample_data(ps.intes.phases))
+```
+
+
+```{r}
+## phyla only for each subset
+ps.water.phases.phylum <- tax_glom(ps.water.phases, taxrank = "Phylum")
+ps.intes.phases.phylum <- tax_glom(ps.intes.phases, taxrank = "Phylum")
+```
+
+```{r}
+## intes at each phase
+ps.intes.stim <- subset_samples(ps.prev, Sample_Regime == "intestine.M" | Sample_Regime == "intestine.V")
+ps.intes.stim <- prune_taxa(taxa_sums(ps.intes.stim) > 0, ps.intes.stim)
+#str(sample_data(ps.intes.stim))
+
+ps.intes.interm <- subset_samples(ps.prev, Sample_Regime == "intestine.MM" | Sample_Regime == "intestine.VM")
+ps.intes.interm <- prune_taxa(taxa_sums(ps.intes.interm) > 0, ps.intes.interm)
+#str(sample_data(ps.intes.interm))
+
+ps.intes.chall <- subset_samples(ps.prev, Sample_Regime == "intestine.MMV" | Sample_Regime == "intestine.VMV")
+ps.intes.chall <- prune_taxa(taxa_sums(ps.intes.chall) > 0, ps.intes.chall)
+#str(sample_data(ps.intes.chall))
+```
+
+
+```{r}
+## phyla only for each subset
+ps.intes.stim.phylum <- tax_glom(ps.intes.stim, taxrank = "Phylum")
+ps.intes.interm.phylum <- tax_glom(ps.intes.interm, taxrank = "Phylum")
+ps.intes.chall.phylum <- tax_glom(ps.intes.chall, taxrank = "Phylum")
+```
+
+
+```{r}
+# water M.MM.MMV
+ps.water.M.MM.MMV <- subset_samples(ps.prev, Sample_Regime == "water.M" | 
+                                      Sample_Regime == "water.MM" | 
+                                      Sample_Regime == "water.MMV")
+ps.water.M.MM.MMV <- prune_taxa(taxa_sums(ps.water.M.MM.MMV) > 0, ps.water.M.MM.MMV)
+# #str(sample_data(ps.water.M.MM.MMV))
+
+# water V.VM.VMV
+ps.water.V.VM.VMV <- subset_samples(ps.prev, Sample_Regime == "water.V" | 
+                                      Sample_Regime == "water.VM" | 
+                                      Sample_Regime == "water.VMV")
+ps.water.V.VM.VMV <- prune_taxa(taxa_sums(ps.water.V.VM.VMV) > 0, ps.water.V.VM.VMV)
+# #str(sample_data(ps.water.V.VM.VMV))
+```
+
+```{r}
+## phyla only for each subset
+ps.water.M.MM.MMV.phylum <- tax_glom(ps.water.M.MM.MMV, taxrank = "Phylum")
+ps.water.V.VM.VMV.phylum <- tax_glom(ps.water.V.VM.VMV, taxrank = "Phylum")
+```
+
+```{r}
+## water at each phase
+ps.water.stim <- subset_samples(ps.prev, Sample_Regime == "water.M" | Sample_Regime == "water.V")
+ps.water.stim <- prune_taxa(taxa_sums(ps.water.stim) > 0, ps.water.stim)
+#str(sample_data(ps.water.stim))
+
+ps.water.interm <- subset_samples(ps.prev,  Sample_Regime == "water.MM" | Sample_Regime == "water.VM")
+ps.water.interm <- prune_taxa(taxa_sums(ps.water.interm) > 0, ps.water.interm)
+#str(sample_data(ps.water.interm))
+
+ps.water.chall <- subset_samples(ps.prev, Sample_Regime == "water.MMV" | Sample_Regime == "water.VMV")
+ps.water.chall <- prune_taxa(taxa_sums(ps.water.chall) > 0, ps.water.chall)
+#str(sample_data(ps.water.chall))
+```
+
+
+```{r}
+## phyla only for each subset
+ps.water.stim.phylum <- tax_glom(ps.water.stim, taxrank = "Phylum")
+ps.water.interm.phylum <- tax_glom(ps.water.interm, taxrank = "Phylum")
+ps.water.chall.phylum <- tax_glom(ps.water.chall, taxrank = "Phylum")
+```
+
+
+```{r}
+## feed
+ps.feed <- subset_samples(ps.prev, sample == "feed")
+ps.feed <- prune_taxa(taxa_sums(ps.feed) > 0, ps.feed)
+#str(sample_data(ps.feed))
+```
+
+
+```{r}
+## phyla only for each subset
+ps.feed.phylum <- tax_glom(ps.feed, taxrank = "Phylum")
+```
+
+
+```{r}
+# venn ----
+ps.stim.intesFeedWtr 
+tiff("figures/venn.ps.stim.intesFeedWtr.tiff", width = 650, height = 650)
+ps_venn(ps.stim.intesFeedWtr, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.interm.intesFeedWtr 
+tiff("figures/venn.ps.interm.intesFeedWtr.tiff", width = 650, height = 650)
+ps_venn(ps.interm.intesFeedWtr, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.chall.intesFeedWtr
+tiff("figures/venn.ps.chall.intesFeedWtr.tiff", width = 650, height = 650)
+ps_venn(ps.chall.intesFeedWtr, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+```{r}
+# venn phylum ----
+ps.stim.intesFeedWtr.phylum
+tiff("figures/venn.ps.stim.intesFeedWtr_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.stim.intesFeedWtr.phylum, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.interm.intesFeedWtr.phylum
+tiff("figures/venn.ps.interm.intesFeedWtr_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.interm.intesFeedWtr.phylum, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.chall.intesFeedWtr.phylum
+tiff("figures/venn.ps.chall.intesFeedWtr_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.chall.intesFeedWtr.phylum, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+```{r}
+ps.M.MM.MMV
+tiff("figures/venn.ps.M.MM.MMV.tiff", width = 650, height = 650)
+ps_venn(ps.M.MM.MMV, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.M
+tiff("figures/venn.ps.M.tiff", width = 650, height = 650)
+ps_venn(ps.M, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.MM
+tiff("figures/venn.ps.MM.tiff", width = 650, height = 650)
+ps_venn(ps.MM, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.MMV
+tiff("figures/venn.ps.MMV.tiff", width = 650, height = 650)
+ps_venn(ps.MMV, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+
+```{r}
+# venn phylum ----
+ps.M.MM.MMV.phylum
+tiff("figures/venn.ps.M.MM.MMV_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.M.MM.MMV.phylum, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.M.phylum
+tiff("figures/venn.ps.M_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.M.phylum, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.MM.phylum
+tiff("figures/venn.ps.MM_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.MM.phylum, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.MMV.phylum
+tiff("figures/venn.ps.MMV_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.MMV.phylum, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+```{r}
+ps.M.MM.MMV
+tiff("figures/venn.ps.M.MM.MMV.tiff", width = 650, height = 650)
+ps_venn(ps.M.MM.MMV, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.M
+tiff("figures/venn.ps.M.tiff", width = 650, height = 650)
+ps_venn(ps.M, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.MM
+tiff("figures/venn.ps.MM.tiff", width = 650, height = 650)
+ps_venn(ps.MM, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.MMV
+tiff("figures/venn.ps.MMV.tiff", width = 650, height = 650)
+ps_venn(ps.MMV, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+```{r}
+ps.V.VM.VMV
+tiff("figures/venn.ps.V.VM.VMV.tiff", width = 650, height = 650)
+ps_venn(ps.V.VM.VMV, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.V
+tiff("figures/venn.ps.V.tiff", width = 650, height = 650)
+ps_venn(ps.V, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.VM
+tiff("figures/venn.ps.VM.tiff", width = 650, height = 650)
+ps_venn(ps.VM, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.VMV
+tiff("figures/venn.ps.VMV.tiff", width = 650, height = 650)
+ps_venn(ps.VMV, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+```{r}
+## venn phyla 
+ps.M.MM.MMV.phylum
+tiff("figures/venn.ps.M.MM.MMV_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.M.MM.MMV.phylum, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.M.phylum
+tiff("figures/venn.ps.M_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.M.phylum, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.MM.phylum
+tiff("figures/venn.ps.MM_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.MM.phylum, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.MMV.phylum
+tiff("figures/venn.ps.MMV_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.MMV.phylum, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+```{r}
+## venn phyla 
+ps.V.VM.VMV.phylum
+tiff("figures/venn.ps.V.VM.VMV_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.V.VM.VMV.phylum, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.V.phylum
+tiff("figures/venn.ps.V_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.V.phylum, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.VM.phylum
+tiff("figures/venn.ps.VM_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.VM.phylum, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.VMV.phylum
+tiff("figures/venn.ps.VMV_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.VMV.phylum, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+```{r}
+ps.intes.M.MM.MMV
+tiff("figures/venn.ps.intes.M.MM.MMV.tiff", width = 650, height = 650)
+ps_venn(ps.intes.M.MM.MMV, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.intes.V.VM.VMV
+tiff("figures/venn.ps.intes.V.VM.VMV.tiff", width = 650, height = 650)
+ps_venn(ps.intes.V.VM.VMV, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+
+```{r}
+## venn phyla 
+ps.intes.M.MM.MMV.phylum
+tiff("figures/venn.ps.intes.M.MM.MMV.phylum_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.intes.M.MM.MMV.phylum, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.intes.V.VM.VMV.phylum
+tiff("figures/venn.ps.intes.V.VM.VMV.phylum.tiff", width = 650, height = 650)
+ps_venn(ps.intes.V.VM.VMV.phylum, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+```{r}
+## water across phases 
+ps.water.phases 
+
+tiff("figures/venn.ps.water.phases.tiff", width = 650, height = 650)
+ps_venn(ps.water.phases, 
+        group = "Phase",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+```{r}
+## intes across phases 
+ps.intes.phases 
+tiff("figures/venn.ps.intes.phases.tiff", width = 650, height = 650)
+ps_venn(ps.intes.phases, 
+        group = "Phase",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+
+```{r}
+## venn phyla 
+## water across phases 
+ps.water.phases.phylum 
+tiff("figures/venn.ps.water.phases_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.water.phases.phylum, 
+        group = "Phase",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+
+## intes across phases 
+ps.intes.phases.phylum 
+tiff("figures/venn.ps.intes.phases_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.intes.phases.phylum, 
+        group = "Phase",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+```{r}
+## intes at each phase
+ps.intes.stim 
+
+tiff("figures/venn.ps.intes.stim.tiff", width = 650, height = 650)
+ps_venn(ps.intes.stim, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2.1, font = 5))
+dev.off()
+
+
+ps.intes.interm 
+
+tiff("figures/venn.ps.intes.interm.tiff", width = 650, height = 650)
+ps_venn(ps.intes.interm, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2.1, font = 5))
+dev.off()
+
+ps.intes.chall 
+
+tiff("figures/venn.ps.intes.chall.tiff", width = 650, height = 650)
+ps_venn(ps.intes.chall, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2.1, font = 5))
+dev.off()
+```
+
+
+```{r}
+## venn phyla ----
+## intes at each phase
+ps.intes.stim.phylum 
+
+tiff("figures/venn.ps.intes.stim_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.intes.stim.phylum, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2.1, font = 5))
+dev.off()
+
+
+ps.intes.interm.phylum 
+
+tiff("figures/venn.ps.intes.interm_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.intes.interm.phylum, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2.1, font = 5))
+dev.off()
+
+ps.intes.chall.phylum 
+
+tiff("figures/venn.ps.intes.chall_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.intes.chall.phylum, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2.1, font = 5))
+dev.off()
+```
+
+
+```{r}
+## water at each phase
+ps.water.stim 
+
+tiff("figures/venn.ps.water.stim.tiff", width = 650, height = 650)
+ps_venn(ps.water.stim, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2.1, font = 5))
+dev.off()
+
+ps.water.interm 
+
+tiff("figures/venn.ps.water.interm.tiff", width = 650, height = 650)
+ps_venn(ps.water.interm, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2.1, font = 5))
+dev.off()
+
+ps.water.chall 
+
+tiff("figures/venn.ps.water.chall.tiff", width = 650, height = 650)
+ps_venn(ps.water.chall, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2.1, font = 5))
+dev.off()
+```
+
+
+```{r}
+## venn phyla 
+## water at each phase
+ps.water.stim.phylum 
+
+tiff("figures/venn.ps.water.stim_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.water.stim.phylum, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2.1, font = 5))
+dev.off()
+
+ps.water.interm.phylum 
+
+tiff("figures/venn.ps.water.interm_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.water.interm.phylum, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2.1, font = 5))
+dev.off()
+
+ps.water.chall.phylum 
+
+tiff("figures/venn.ps.water.chall_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.water.chall.phylum, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2.1, font = 5))
+dev.off()
+```
+
+
+```{r}
+# venn ----
+ps.water.M.MM.MMV 
+tiff("figures/venn.ps.water.M.MM.MMV.tiff", width = 650, height = 650)
+ps_venn(ps.water.M.MM.MMV, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.water.V.VM.VMV 
+tiff("figures/venn.ps.water.V.VM.VMV.tiff", width = 650, height = 650)
+ps_venn(ps.water.V.VM.VMV, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+```{r}
+# venn phyla ----
+ps.water.M.MM.MMV.phylum 
+tiff("figures/venn.ps.water.M.MM.MMV.phylum.tiff", width = 650, height = 650)
+ps_venn(ps.water.M.MM.MMV.phylum, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.water.V.VM.VMV.phylum 
+tiff("figures/venn.ps.water.V.VM.VMV.phylum.tiff", width = 650, height = 650)
+ps_venn(ps.water.V.VM.VMV.phylum, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+```{r}
+## feed
+ps.feed 
+
+tiff("figures/venn.ps.feed.tiff", width = 650, height = 650)
+ps_venn(ps.feed, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2.1, font = 5))
+dev.off()
+```
+```{r}
+## venn phyla 
+## feed
+ps.feed.phylum
+
+tiff("figures/venn.ps.feed_phylum.tiff", width = 650, height = 650)
+ps_venn(ps.feed.phylum, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = "counts", 
+                          cex = 2.1, font = 5))
+dev.off()
+```
+
+### genus level and venn
+
+```{r}
+## genus only for each subset
+ps.stim.intesFeedWtr.genus <- tax_glom(ps.stim.intesFeedWtr, taxrank = "Genus")
+ps.interm.intesFeedWtr.genus <- tax_glom(ps.interm.intesFeedWtr, taxrank = "Genus")
+ps.chall.intesFeedWtr.genus <- tax_glom(ps.chall.intesFeedWtr, taxrank = "Genus")
+```
+
+
+```{r}
+# venn for genus level ----
+ps.stim.intesFeedWtr.genus 
+tiff("figures/venn.ps.stim.intesFeedWtr_genus.tiff", width = 650, height = 650)
+ps_venn(ps.stim.intesFeedWtr.genus, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.interm.intesFeedWtr.genus 
+tiff("figures/venn.ps.interm.intesFeedWtr_genus.tiff", width = 650, height = 650)
+ps_venn(ps.interm.intesFeedWtr.genus, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.chall.intesFeedWtr.genus 
+tiff("figures/venn.ps.chall.intesFeedWtr_genus.tiff", width = 650, height = 650)
+ps_venn(ps.chall.intesFeedWtr.genus, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+
+```{r}
+## genus only for each subset
+ps.M.MM.MMV.genus <- tax_glom(ps.M.MM.MMV, taxrank = "Genus")
+ps.M.genus <- tax_glom(ps.M, taxrank = "Genus")
+ps.MM.genus <- tax_glom(ps.MM, taxrank = "Genus")
+ps.MMV.genus <- tax_glom(ps.MMV, taxrank = "Genus")
+
+```
+
+```{r}
+# venn for genus level ----
+ps.M.MM.MMV.genus
+tiff("figures/venn.ps.M.MM.MMV_genus.tiff", width = 650, height = 650)
+ps_venn(ps.M.MM.MMV.genus, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.M.genus
+tiff("figures/venn.ps.M_genus.tiff", width = 650, height = 650)
+ps_venn(ps.M.genus, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.MM.genus
+tiff("figures/venn.ps.MM_genus.tiff", width = 650, height = 650)
+ps_venn(ps.MM.genus, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.MMV.genus
+tiff("figures/venn.ps.MMV_genus.tiff", width = 650, height = 650)
+ps_venn(ps.MMV.genus, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+```{r}
+## genus only for each subset
+ps.V.VM.VMV.genus <- tax_glom(ps.V.VM.VMV, taxrank = "Genus")
+ps.V.genus <- tax_glom(ps.V, taxrank = "Genus")
+ps.VM.genus <- tax_glom(ps.VM, taxrank = "Genus")
+ps.VMV.genus <- tax_glom(ps.VMV, taxrank = "Genus")
+```
+
+
+```{r}
+# venn for genus level ----
+ps.V.VM.VMV.genus
+tiff("figures/venn.ps.V.VM.VMV_genus.tiff", width = 650, height = 650)
+ps_venn(ps.V.VM.VMV.genus, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.V.genus
+tiff("figures/venn.ps.V_genus.tiff", width = 650, height = 650)
+ps_venn(ps.V.genus, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.VM.genus
+tiff("figures/venn.ps.VM_genus.tiff", width = 650, height = 650)
+ps_venn(ps.VM.genus, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.VMV.genus
+tiff("figures/venn.ps.VMV_genus.tiff", width = 650, height = 650)
+ps_venn(ps.VMV.genus, 
+        group = "sample",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+```{r}
+## genus only for each subset
+ps.intes.M.MM.MMV.genus <- tax_glom(ps.intes.M.MM.MMV, taxrank = "Genus")
+ps.intes.V.VM.VMV.genus <- tax_glom(ps.intes.V.VM.VMV, taxrank = "Genus")
+```
+
+
+```{r}
+# venn for genus level ----
+ps.intes.M.MM.MMV.genus
+tiff("figures/venn.ps.intes.M.MM.MMV.genus.tiff", width = 650, height = 650)
+ps_venn(ps.intes.M.MM.MMV.genus, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.intes.V.VM.VMV.genus
+tiff("figures/venn.ps.intes.V.VM.VMV.genus.tiff", width = 650, height = 650)
+ps_venn(ps.intes.V.VM.VMV.genus, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+```{r}
+## genus only for each subset
+ps.water.phases.genus <- tax_glom(ps.water.phases, taxrank = "Genus")
+ps.intes.phases.genus <- tax_glom(ps.intes.phases, taxrank = "Genus")
+```
+
+
+```{r}
+# venn for genus level ----
+## water across phases 
+ps.water.phases.genus 
+
+tiff("figures/venn.ps.water.phases_genus.tiff", width = 650, height = 650)
+ps_venn(ps.water.phases.genus, 
+        group = "Phase",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+## intes across phases 
+ps.intes.phases.genus
+tiff("figures/venn.ps.intes.phases_genus.tiff", width = 650, height = 650)
+ps_venn(ps.intes.phases.genus, 
+        group = "Phase",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+
+```{r}
+## genera only for each subset
+ps.intes.stim.genus <- tax_glom(ps.intes.stim, taxrank = "Genus")
+ps.intes.interm.genus <- tax_glom(ps.intes.interm, taxrank = "Genus")
+ps.intes.chall.genus <- tax_glom(ps.intes.chall, taxrank = "Genus")
+```
+
+
+```{r}
+## intes at each phase
+ps.intes.stim.genus 
+
+tiff("figures/venn.ps.intes.stim_genus.tiff", width = 650, height = 650)
+ps_venn(ps.intes.stim.genus, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2.1, font = 5))
+dev.off()
+
+
+ps.intes.interm.genus 
+
+tiff("figures/venn.ps.intes.interm_genus.tiff", width = 650, height = 650)
+ps_venn(ps.intes.interm.genus, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2.1, font = 5))
+dev.off()
+
+ps.intes.chall.genus 
+
+tiff("figures/venn.ps.intes.chall_genus.tiff", width = 650, height = 650)
+ps_venn(ps.intes.chall.genus, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2.1, font = 5))
+dev.off()
+```
+
+```{r}
+## genera only for each subset
+ps.water.stim.genus <- tax_glom(ps.water.stim, taxrank = "Genus")
+ps.water.interm.genus <- tax_glom(ps.water.interm, taxrank = "Genus")
+ps.water.chall.genus <- tax_glom(ps.water.chall, taxrank = "Genus")
+```
+
+
+```{r}
+## water at each phase
+ps.water.stim.genus 
+
+tiff("figures/venn.ps.water.stim_genus.tiff", width = 650, height = 650)
+ps_venn(ps.water.stim.genus, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2.1, font = 5))
+dev.off()
+
+ps.water.interm.genus 
+
+tiff("figures/venn.ps.water.interm_genus.tiff", width = 650, height = 650)
+ps_venn(ps.water.interm.genus, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2.1, font = 5))
+dev.off()
+
+ps.water.chall.genus 
+
+tiff("figures/venn.ps.water.chall_genus.tiff", width = 650, height = 650)
+ps_venn(ps.water.chall.genus, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2.1, font = 5))
+dev.off()
+```
+
+```{r}
+## genera only for each subset
+ps.water.M.MM.MMV.genus <- tax_glom(ps.water.M.MM.MMV, taxrank = "Genus")
+ps.water.V.VM.VMV.genus <- tax_glom(ps.water.V.VM.VMV, taxrank = "Genus")
+```
+
+
+```{r}
+# venn genera ----
+ps.water.M.MM.MMV.genus 
+tiff("figures/venn.ps.water.M.MM.MMV.genus.tiff", width = 650, height = 650)
+ps_venn(ps.water.M.MM.MMV.genus, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+
+ps.water.V.VM.VMV.genus 
+tiff("figures/venn.ps.water.V.VM.VMV.genus.tiff", width = 650, height = 650)
+ps_venn(ps.water.V.VM.VMV.genus, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2, font = 5))
+dev.off()
+```
+
+```{r}
+## genera only for each subset
+ps.feed.genus <- tax_glom(ps.feed, taxrank = "Genus")
+```
+
+
+```{r}
+## feed
+ps.feed.genus 
+
+tiff("figures/venn.ps.feed_genus.tiff", width = 650, height = 650)
+ps_venn(ps.feed.genus, 
+        group = "Sample_Regime",
+        labels = list(cex = 1.8),
+        quantities = list(type = c("counts", "percent"), 
+                          cex = 2.1, font = 5))
+dev.off()
+```
+
+
+
+```{r}
+sessionInfo()
+```
