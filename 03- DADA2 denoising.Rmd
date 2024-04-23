@@ -1,7 +1,7 @@
 ---
 title: "DADA2 denoising and number of reads"
 author: "Marwa Tawfik"
-summary: "Microbiome_dada2_pipeline_NPdevstages"
+summary: "NP_devStages_ampliseq"
 Platform: "R version 4.1.0 (2021-05-18) -- Camp Pontanezen; x86_64-conda-linux-gnu (64-bit)"
 date: "22 October 2022"
 output: html_document
