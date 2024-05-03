@@ -20,8 +20,7 @@ shannon <- read_excel("shannon.xlsx")
 # check if assumption of linear model is met or not
 model <- lm(stimulus ~ treatment, data = sgr)
 plot(model)
-# nearly equal variance for each tested group/treatmnet (plot1)
-# linearity of the model is not achieved (plot 2)
+
 
 model <- lm(stimulus ~ treatment, data = shannon)
 plot(model)
@@ -189,8 +188,6 @@ shannon <- read_excel("shannon_devStages.xlsx")
 # check if assumption of linear model is met or not
 model <- lm(sgr ~ treatment, data = sgr)
 plot(model)
-# nearly equal variance for each tested group/treatmnet (plot1)
-# linearity of the model is not achieved (plot 2)
 
 model <- lm(shannon ~ treatment, data = shannon)
 plot(model)
